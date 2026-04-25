@@ -1,0 +1,11 @@
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\bin\Debug\net10.0\VpnProduct.Domain.deps.json
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\bin\Debug\net10.0\VpnProduct.Domain.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\bin\Debug\net10.0\VpnProduct.Domain.pdb
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.AssemblyInfoInputs.cache
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.AssemblyInfo.cs
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.csproj.CoreCompileInputs.cache
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\refint\VpnProduct.Domain.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.pdb
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\ref\VpnProduct.Domain.dll

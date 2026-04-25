@@ -1,0 +1,15 @@
+C:\Projects\VpnProductClean\src\VpnProduct.Application\bin\Debug\net10.0\VpnProduct.Application.deps.json
+C:\Projects\VpnProductClean\src\VpnProduct.Application\bin\Debug\net10.0\VpnProduct.Application.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Application\bin\Debug\net10.0\VpnProduct.Application.pdb
+C:\Projects\VpnProductClean\src\VpnProduct.Application\bin\Debug\net10.0\VpnProduct.Domain.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Application\bin\Debug\net10.0\VpnProduct.Domain.pdb
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.csproj.AssemblyReference.cache
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.AssemblyInfoInputs.cache
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.AssemblyInfo.cs
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.csproj.CoreCompileInputs.cache
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProdu.71899A7F.Up2Date
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\refint\VpnProduct.Application.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.pdb
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\ref\VpnProduct.Application.dll
