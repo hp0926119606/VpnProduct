@@ -13,3 +13,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProd
 C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\refint\VpnProduct.Application.dll
 C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.pdb
 C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\ref\VpnProduct.Application.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Application\obj\Debug\net10.0\VpnProduct.Application.sourcelink.json

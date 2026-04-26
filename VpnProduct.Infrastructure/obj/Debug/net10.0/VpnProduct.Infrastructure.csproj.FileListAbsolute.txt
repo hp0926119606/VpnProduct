@@ -17,3 +17,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Infrastructure\obj\Debug\net10.0\refi
 C:\Projects\VpnProductClean\src\VpnProduct.Infrastructure\obj\Debug\net10.0\VpnProduct.Infrastructure.pdb
 C:\Projects\VpnProductClean\src\VpnProduct.Infrastructure\obj\Debug\net10.0\VpnProduct.Infrastructure.genruntimeconfig.cache
 C:\Projects\VpnProductClean\src\VpnProduct.Infrastructure\obj\Debug\net10.0\ref\VpnProduct.Infrastructure.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Infrastructure\obj\Debug\net10.0\VpnProduct.Infrastructure.sourcelink.json

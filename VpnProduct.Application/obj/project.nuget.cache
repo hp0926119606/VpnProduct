@@ -1,11 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "N5v4UztNv0U=",
+  "dgSpecHash": "lzkpiUMXySg=",
   "success": true,
   "projectFilePath": "C:\\Projects\\VpnProductClean\\src\\VpnProduct.Application\\VpnProduct.Application.csproj",
-  "expectedPackageFiles": [
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.netcore.app.runtime.linux-arm64\\10.0.2\\microsoft.netcore.app.runtime.linux-arm64.10.0.2.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.linux-arm64\\10.0.2\\microsoft.aspnetcore.app.runtime.linux-arm64.10.0.2.nupkg.sha512"
-  ],
+  "expectedPackageFiles": [],
   "logs": []
 }

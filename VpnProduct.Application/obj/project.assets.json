@@ -12,18 +12,6 @@
           "bin/placeholder/VpnProduct.Domain.dll": {}
         }
       }
-    },
-    "net10.0/linux-arm64": {
-      "VpnProduct.Domain/1.0.0": {
-        "type": "project",
-        "framework": ".NETCoreApp,Version=v10.0",
-        "compile": {
-          "bin/placeholder/VpnProduct.Domain.dll": {}
-        },
-        "runtime": {
-          "bin/placeholder/VpnProduct.Domain.dll": {}
-        }
-      }
     }
   },
   "libraries": {
@@ -103,16 +91,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Runtime.linux-arm64",
-            "version": "[10.0.2, 10.0.2]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Runtime.linux-arm64",
-            "version": "[10.0.2, 10.0.2]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
@@ -393,11 +371,6 @@
           "System.Xml.XPath": "(,4.3.32767]",
           "System.Xml.XPath.XDocument": "(,5.0.32767]"
         }
-      }
-    },
-    "runtimes": {
-      "linux-arm64": {
-        "#import": []
       }
     }
   }

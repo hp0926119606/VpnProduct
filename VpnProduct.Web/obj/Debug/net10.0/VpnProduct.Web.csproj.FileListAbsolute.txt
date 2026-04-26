@@ -128,3 +128,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\refint\VpnProdu
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.pdb
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.genruntimeconfig.cache
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\ref\VpnProduct.Web.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.sourcelink.json

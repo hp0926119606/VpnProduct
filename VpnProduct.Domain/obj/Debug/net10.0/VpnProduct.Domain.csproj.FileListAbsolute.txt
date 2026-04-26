@@ -9,3 +9,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.D
 C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\refint\VpnProduct.Domain.dll
 C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.pdb
 C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\ref\VpnProduct.Domain.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Domain\obj\Debug\net10.0\VpnProduct.Domain.sourcelink.json

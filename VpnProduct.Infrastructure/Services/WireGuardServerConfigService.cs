@@ -35,18 +35,11 @@ namespace VpnProduct.Infrastructure.Services
                 .OrderBy(x => x.Name)
                 .ToListAsync(cancellationToken);
 
-            var privateKey = Environment.GetEnvironmentVariable("VPNPRODUCT_WG_SERVER_PRIVATE_KEY");
-            if (string.IsNullOrWhiteSpace(privateKey))
-            {
-                privateKey = "__REPLACE_SERVER_PRIVATE_KEY__";
-            }
-
             var sb = new StringBuilder();
             sb.AppendLine("[Interface]");
             sb.AppendLine($"Address = {node.ServerAddressCidr}");
             sb.AppendLine($"ListenPort = {node.ListenPort}");
-            sb.AppendLine($"PrivateKey = {privateKey}");
-            sb.AppendLine();
+		sb.AppendLine();
 
             foreach (var peer in peers)
             {

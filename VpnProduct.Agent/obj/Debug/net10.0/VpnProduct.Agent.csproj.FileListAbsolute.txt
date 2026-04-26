@@ -51,3 +51,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Agent\obj\Debug\net10.0\VpnProduct.Ag
 C:\Projects\VpnProductClean\src\VpnProduct.Agent\obj\Debug\net10.0\VpnProduct.Agent.genruntimeconfig.cache
 C:\Projects\VpnProductClean\src\VpnProduct.Agent\obj\Debug\net10.0\ref\VpnProduct.Agent.dll
 C:\Projects\VpnProductClean\src\VpnProduct.Agent\bin\Debug\net10.0\Microsoft.Extensions.Http.dll
+C:\Projects\VpnProductClean\src\VpnProduct.Agent\obj\Debug\net10.0\VpnProduct.Agent.sourcelink.json
