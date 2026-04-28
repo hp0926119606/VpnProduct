@@ -1,11 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using VpnProduct.Application.Interfaces;
+using VpnProduct.Application.Models.VpnPeers;
 using VpnProduct.Domain.Entities;
 using VpnProduct.Infrastructure.Data;
 
@@ -13,106 +11,226 @@ namespace VpnProduct.Infrastructure.Services
 {
     public class VpnPeerService : IVpnPeerService
     {
-        private readonly ApplicationDbContext _dbContext;
-        private readonly ISyncJobService _syncJobService;
+        private readonly ApplicationDbContext _db;
+        private readonly IConfiguration _configuration;
 
-        public VpnPeerService(ApplicationDbContext dbContext, ISyncJobService syncJobService)
+        public VpnPeerService(ApplicationDbContext db, IConfiguration configuration)
         {
-            _dbContext = dbContext;
-            _syncJobService = syncJobService;
+            _db = db;
+            _configuration = configuration;
         }
 
-        public async Task<List<VpnPeer>> GetByNodeIdAsync(Guid vpnNodeId, CancellationToken cancellationToken = default)
+        public async Task<CreateVpnPeerResponse> CreateAsync(CreateVpnPeerRequest request, CancellationToken cancellationToken = default)
         {
-            return await _dbContext.VpnPeers
-                .AsNoTracking()
-                .Where(x => x.VpnNodeId == vpnNodeId)
-                .OrderBy(x => x.Name)
+            var node = await _db.VpnNodes
+                .FirstOrDefaultAsync(x => x.Id == request.VpnNodeId && x.IsActive, cancellationToken);
+
+            if (node == null)
+            {
+                throw new InvalidOperationException("VpnNode not found or inactive.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw new InvalidOperationException("Peer name is required.");
+            }
+
+            var keyPair = GenerateWireGuardKeyPair();
+            var assignedIp = await AllocateNextIpAsync(node.Id, cancellationToken);
+
+            var peer = new VpnPeer
+            {
+                Id = Guid.NewGuid(),
+                VpnNodeId = node.Id,
+                Name = request.Name.Trim(),
+                PublicKey = keyPair.PublicKey,
+                AssignedIp = assignedIp,
+                IsActive = true
+            };
+
+            node.ConfigVersion += 1;
+
+            _db.VpnPeers.Add(peer);
+
+            _db.SyncJobs.Add(new SyncJob
+            {
+                Id = Guid.NewGuid(),
+                VpnNodeId = node.Id,
+                Status = "Pending",
+                JobType = "PeerCreated",
+                PayloadJson = JsonSerializer.Serialize(new
+                {
+                    peer.Id,
+                    peer.Name,
+                    peer.PublicKey,
+                    peer.AssignedIp
+                }),
+                ConfigVersion = node.ConfigVersion,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            var clientConfig = BuildClientConfig(node, keyPair.PrivateKey, assignedIp);
+
+            return new CreateVpnPeerResponse
+            {
+                Id = peer.Id,
+                VpnNodeId = peer.VpnNodeId,
+                Name = peer.Name,
+                PublicKey = peer.PublicKey,
+                AssignedIp = peer.AssignedIp,
+                IsActive = peer.IsActive,
+                ConfigVersion = node.ConfigVersion,
+                ClientConfig = clientConfig
+            };
+        }
+
+        private async Task<string> AllocateNextIpAsync(Guid nodeId, CancellationToken cancellationToken)
+        {
+            var prefix = _configuration["VpnProduct:PeerIpPrefix"] ?? "10.0.1.";
+            var startText = _configuration["VpnProduct:PeerIpStart"] ?? "201";
+            var endText = _configuration["VpnProduct:PeerIpEnd"] ?? "254";
+
+            var start = int.Parse(startText);
+            var end = int.Parse(endText);
+
+            var usedIps = await _db.VpnPeers
+                .Where(x => x.VpnNodeId == nodeId)
+                .Select(x => x.AssignedIp)
                 .ToListAsync(cancellationToken);
-        }
 
-        public async Task<VpnPeer?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        {
-            return await _dbContext.VpnPeers
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-        }
-
-        public async Task<VpnPeer> CreateAsync(VpnPeer peer, CancellationToken cancellationToken = default)
-        {
-            peer.Id = Guid.NewGuid();
-
-            _dbContext.VpnPeers.Add(peer);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            await _syncJobService.EnqueueNodeSyncAsync(
-                peer.VpnNodeId,
-                "PeerCreated",
-                JsonSerializer.Serialize(new
-                {
-                    peerId = peer.Id,
-                    peerName = peer.Name
-                }),
-                cancellationToken);
-
-            return peer;
-        }
-
-        public async Task<VpnPeer> UpdateAsync(Guid id, VpnPeer peer, CancellationToken cancellationToken = default)
-        {
-            var existing = await _dbContext.VpnPeers
-                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-
-            if (existing == null)
+            for (var i = start; i <= end; i++)
             {
-                throw new InvalidOperationException($"VpnPeer not found: {id}");
+                var ip = $"{prefix}{i}/32";
+                var ipWithoutCidr = $"{prefix}{i}";
+
+                if (!usedIps.Contains(ip) && !usedIps.Contains(ipWithoutCidr))
+                {
+                    return ip;
+                }
             }
 
-            existing.Name = peer.Name;
-            existing.PublicKey = peer.PublicKey;
-            existing.AssignedIp = peer.AssignedIp;
-            existing.IsActive = peer.IsActive;
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            await _syncJobService.EnqueueNodeSyncAsync(
-                existing.VpnNodeId,
-                "PeerUpdated",
-                JsonSerializer.Serialize(new
-                {
-                    peerId = existing.Id,
-                    peerName = existing.Name
-                }),
-                cancellationToken);
-
-            return existing;
+            throw new InvalidOperationException("No available VPN client IP.");
         }
 
-        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        private WireGuardKeyPair GenerateWireGuardKeyPair()
         {
-            var existing = await _dbContext.VpnPeers
-                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var privateKey = RunCommand("/bin/bash", "-c \"wg genkey\"").Trim();
+            var publicKey = RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
 
-            if (existing == null)
+            if (string.IsNullOrWhiteSpace(privateKey) || string.IsNullOrWhiteSpace(publicKey))
             {
-                return;
+                throw new InvalidOperationException("Failed to generate WireGuard key pair.");
             }
 
-            var nodeId = existing.VpnNodeId;
-            var peerName = existing.Name;
-
-            _dbContext.VpnPeers.Remove(existing);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            await _syncJobService.EnqueueNodeSyncAsync(
-                nodeId,
-                "PeerDeleted",
-                JsonSerializer.Serialize(new
-                {
-                    peerId = id,
-                    peerName = peerName
-                }),
-                cancellationToken);
+            return new WireGuardKeyPair(privateKey, publicKey);
         }
+
+        private string BuildClientConfig(VpnNode node, string clientPrivateKey, string assignedIp)
+        {
+            var endpointHost = _configuration["VpnProduct:EndpointHost"] ?? "61.70.3.87";
+            var dns = _configuration["VpnProduct:ClientDns"] ?? "8.8.8.8";
+            var allowedIps = _configuration["VpnProduct:ClientAllowedIps"] ?? "0.0.0.0/0";
+            var serverPublicKey = GetServerPublicKey();
+
+            return $"""
+[Interface]
+PrivateKey = {clientPrivateKey}
+Address = {assignedIp}
+DNS = {dns}
+
+[Peer]
+PublicKey = {serverPublicKey}
+Endpoint = {endpointHost}:{node.ListenPort}
+AllowedIPs = {allowedIps}
+PersistentKeepalive = 25
+""";
+        }
+
+        private string GetServerPublicKey()
+        {
+            var configured = _configuration["VpnProduct:ServerPublicKey"];
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                return configured.Trim();
+            }
+
+            var serverConfigPath = _configuration["VpnProduct:ServerWireGuardConfigPath"] ?? "/etc/wireguard/wg1.conf";
+
+            if (!File.Exists(serverConfigPath))
+            {
+                throw new FileNotFoundException($"Server WireGuard config not found: {serverConfigPath}");
+            }
+
+            var privateKeyLine = File.ReadAllLines(serverConfigPath)
+                .FirstOrDefault(x => x.TrimStart().StartsWith("PrivateKey", StringComparison.OrdinalIgnoreCase));
+
+            if (string.IsNullOrWhiteSpace(privateKeyLine))
+            {
+                throw new InvalidOperationException($"PrivateKey not found in {serverConfigPath}");
+            }
+
+            var privateKey = privateKeyLine.Split('=', 2)[1].Trim();
+
+            return RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
+        }
+
+        private static string RunCommand(string fileName, string arguments)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {fileName}");
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"{fileName} failed: {error}");
+            }
+
+            return output;
+        }
+
+        private static string RunCommandWithStandardInput(string fileName, string arguments, string standardInput)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {fileName}");
+
+            process.StandardInput.WriteLine(standardInput);
+            process.StandardInput.Close();
+
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"{fileName} failed: {error}");
+            }
+
+            return output;
+        }
+
+        private sealed record WireGuardKeyPair(string PrivateKey, string PublicKey);
     }
 }
