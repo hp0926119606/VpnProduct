@@ -27,19 +27,19 @@ namespace VpnProduct.Infrastructure.Data
                 b.Property(x => x.AgentToken).HasMaxLength(200).IsRequired();
             });
 
-            modelBuilder.Entity<VpnPeer>(b =>
-            {
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-                b.Property(x => x.PublicKey).HasColumnType("text").IsRequired();
-                b.Property(x => x.AssignedIp).HasMaxLength(100).IsRequired();
-                b.Property(x => x.ClientConfig).HasColumnType("text");
+           modelBuilder.Entity<VpnPeer>(b =>
+{
+    b.HasKey(x => x.Id);
 
-                b.HasOne(x => x.VpnNode)
-                    .WithMany()
-                    .HasForeignKey(x => x.VpnNodeId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
+    b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+    b.Property(x => x.PublicKey).HasColumnType("text").IsRequired();
+    b.Property(x => x.AssignedIp).HasMaxLength(100).IsRequired();
+    b.Property(x => x.ClientConfig).HasColumnType("text");
+
+    b.HasOne(x => x.VpnNode)
+        .WithMany(n => n.Peers)   // ✅ 關鍵
+        .HasForeignKey(x => x.VpnNodeId);
+});
 
             modelBuilder.Entity<SyncJob>(b =>
             {
