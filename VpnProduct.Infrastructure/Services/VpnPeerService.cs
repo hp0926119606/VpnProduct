@@ -38,6 +38,10 @@ namespace VpnProduct.Infrastructure.Services
             var keyPair = GenerateWireGuardKeyPair();
             var assignedIp = await AllocateNextIpAsync(node.Id, cancellationToken);
 
+            node.ConfigVersion += 1;
+
+            var clientConfig = BuildClientConfig(node, keyPair.PrivateKey, assignedIp);
+
             var peer = new VpnPeer
             {
                 Id = Guid.NewGuid(),
@@ -45,10 +49,9 @@ namespace VpnProduct.Infrastructure.Services
                 Name = request.Name.Trim(),
                 PublicKey = keyPair.PublicKey,
                 AssignedIp = assignedIp,
-                IsActive = true
+                IsActive = true,
+                ClientConfig = clientConfig
             };
-
-            node.ConfigVersion += 1;
 
             _db.VpnPeers.Add(peer);
 
@@ -71,8 +74,6 @@ namespace VpnProduct.Infrastructure.Services
 
             await _db.SaveChangesAsync(cancellationToken);
 
-            var clientConfig = BuildClientConfig(node, keyPair.PrivateKey, assignedIp);
-
             return new CreateVpnPeerResponse
             {
                 Id = peer.Id,
@@ -86,14 +87,34 @@ namespace VpnProduct.Infrastructure.Services
             };
         }
 
+        public async Task<GetVpnPeerConfigResponse> GetConfigAsync(Guid peerId, CancellationToken cancellationToken = default)
+        {
+            var peer = await _db.VpnPeers
+                .FirstOrDefaultAsync(x => x.Id == peerId, cancellationToken);
+
+            if (peer == null)
+            {
+                throw new InvalidOperationException("VpnPeer not found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(peer.ClientConfig))
+            {
+                throw new InvalidOperationException("Client config not generated.");
+            }
+
+            return new GetVpnPeerConfigResponse
+            {
+                PeerId = peer.Id,
+                Name = peer.Name,
+                ClientConfig = peer.ClientConfig
+            };
+        }
+
         private async Task<string> AllocateNextIpAsync(Guid nodeId, CancellationToken cancellationToken)
         {
             var prefix = _configuration["VpnProduct:PeerIpPrefix"] ?? "10.0.1.";
-            var startText = _configuration["VpnProduct:PeerIpStart"] ?? "201";
-            var endText = _configuration["VpnProduct:PeerIpEnd"] ?? "254";
-
-            var start = int.Parse(startText);
-            var end = int.Parse(endText);
+            var start = int.Parse(_configuration["VpnProduct:PeerIpStart"] ?? "201");
+            var end = int.Parse(_configuration["VpnProduct:PeerIpEnd"] ?? "254");
 
             var usedIps = await _db.VpnPeers
                 .Where(x => x.VpnNodeId == nodeId)
@@ -103,9 +124,8 @@ namespace VpnProduct.Infrastructure.Services
             for (var i = start; i <= end; i++)
             {
                 var ip = $"{prefix}{i}/32";
-                var ipWithoutCidr = $"{prefix}{i}";
 
-                if (!usedIps.Contains(ip) && !usedIps.Contains(ipWithoutCidr))
+                if (!usedIps.Contains(ip))
                 {
                     return ip;
                 }
@@ -118,11 +138,6 @@ namespace VpnProduct.Infrastructure.Services
         {
             var privateKey = RunCommand("/bin/bash", "-c \"wg genkey\"").Trim();
             var publicKey = RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
-
-            if (string.IsNullOrWhiteSpace(privateKey) || string.IsNullOrWhiteSpace(publicKey))
-            {
-                throw new InvalidOperationException("Failed to generate WireGuard key pair.");
-            }
 
             return new WireGuardKeyPair(privateKey, publicKey);
         }
@@ -151,6 +166,7 @@ PersistentKeepalive = 25
         private string GetServerPublicKey()
         {
             var configured = _configuration["VpnProduct:ServerPublicKey"];
+
             if (!string.IsNullOrWhiteSpace(configured))
             {
                 return configured.Trim();
@@ -188,6 +204,7 @@ PersistentKeepalive = 25
             };
 
             using var process = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {fileName}");
+
             var output = process.StandardOutput.ReadToEnd();
             var error = process.StandardError.ReadToEnd();
 

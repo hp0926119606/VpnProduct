@@ -21,5 +21,23 @@ namespace VpnProduct.Web.Controllers
             var result = await _vpnPeerService.CreateAsync(request, cancellationToken);
             return Ok(result);
         }
+
+        [HttpGet("{id}/config")]
+        public async Task<IActionResult> GetConfig(Guid id, CancellationToken cancellationToken)
+        {
+            var result = await _vpnPeerService.GetConfigAsync(id, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("{id}/config-file")]
+        public async Task<IActionResult> DownloadConfigFile(Guid id, CancellationToken cancellationToken)
+        {
+            var result = await _vpnPeerService.GetConfigAsync(id, cancellationToken);
+
+            var fileName = $"{result.Name}.conf";
+            var bytes = System.Text.Encoding.UTF8.GetBytes(result.ClientConfig);
+
+            return File(bytes, "application/octet-stream", fileName);
+        }
     }
 }

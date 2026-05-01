@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using VpnProduct.Infrastructure.Data;
@@ -11,9 +12,11 @@ using VpnProduct.Infrastructure.Data;
 namespace VpnProduct.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260501193933_AddClientConfigToVpnPeer")]
+    partial class AddClientConfigToVpnPeer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,14 +59,9 @@ namespace VpnProduct.Infrastructure.Migrations
                     b.Property<Guid>("VpnNodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("VpnNodeId1")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("VpnNodeId");
-
-                    b.HasIndex("VpnNodeId1");
 
                     b.ToTable("SyncJobs");
                 });
@@ -140,14 +138,9 @@ namespace VpnProduct.Infrastructure.Migrations
                     b.Property<Guid>("VpnNodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("VpnNodeId1")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("VpnNodeId");
-
-                    b.HasIndex("VpnNodeId1");
 
                     b.ToTable("VpnPeers");
                 });
@@ -155,29 +148,19 @@ namespace VpnProduct.Infrastructure.Migrations
             modelBuilder.Entity("VpnProduct.Domain.Entities.SyncJob", b =>
                 {
                     b.HasOne("VpnProduct.Domain.Entities.VpnNode", null)
-                        .WithMany()
+                        .WithMany("SyncJobs")
                         .HasForeignKey("VpnNodeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("VpnProduct.Domain.Entities.VpnNode", null)
-                        .WithMany("SyncJobs")
-                        .HasForeignKey("VpnNodeId1");
                 });
 
             modelBuilder.Entity("VpnProduct.Domain.Entities.VpnPeer", b =>
                 {
-                    b.HasOne("VpnProduct.Domain.Entities.VpnNode", "VpnNode")
-                        .WithMany()
+                    b.HasOne("VpnProduct.Domain.Entities.VpnNode", null)
+                        .WithMany("Peers")
                         .HasForeignKey("VpnNodeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("VpnProduct.Domain.Entities.VpnNode", null)
-                        .WithMany("Peers")
-                        .HasForeignKey("VpnNodeId1");
-
-                    b.Navigation("VpnNode");
                 });
 
             modelBuilder.Entity("VpnProduct.Domain.Entities.VpnNode", b =>

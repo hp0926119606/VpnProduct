@@ -5,5 +5,6 @@ namespace VpnProduct.Application.Interfaces
     public interface IVpnPeerService
     {
         Task<CreateVpnPeerResponse> CreateAsync(CreateVpnPeerRequest request, CancellationToken cancellationToken = default);
+        Task<GetVpnPeerConfigResponse> GetConfigAsync(Guid peerId, CancellationToken cancellationToken = default);
     }
 }
