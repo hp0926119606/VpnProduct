@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="VpnProduct.Agent/VpnProduct.Agent.csproj" />
   <Project Path="VpnProduct.Application/VpnProduct.Application.csproj" />
+  <Project Path="VpnProduct.Desktop/VpnProduct.Desktop.csproj" />
   <Project Path="VpnProduct.Domain/VpnProduct.Domain.csproj" />
   <Project Path="VpnProduct.Infrastructure/VpnProduct.Infrastructure.csproj" />
   <Project Path="VpnProduct.Web/VpnProduct.Web.csproj" />
