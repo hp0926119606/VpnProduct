@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using VpnProduct.Application.Interfaces;
 using VpnProduct.Infrastructure.Data;
+using VpnProduct.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +22,10 @@ builder.Services
 
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
+
+builder.Services.AddScoped<IVpnPeerService, VpnPeerService>();
+builder.Services.AddScoped<ISyncJobService, SyncJobService>();
+builder.Services.AddScoped<IWireGuardServerConfigService, WireGuardServerConfigService>();
 
 var app = builder.Build();
 
