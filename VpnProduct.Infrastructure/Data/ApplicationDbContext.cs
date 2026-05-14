@@ -1,59 +1,41 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
 using VpnProduct.Domain.Entities;
 
-namespace VpnProduct.Infrastructure.Data
+namespace VpnProduct.Infrastructure.Data;
+
+public class ApplicationDbContext
+    : IdentityDbContext<IdentityUser>
 {
-    public class ApplicationDbContext : DbContext
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options)
+        : base(options)
     {
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-            : base(options)
-        {
-        }
+    }
 
-        public DbSet<VpnNode> VpnNodes => Set<VpnNode>();
-        public DbSet<VpnPeer> VpnPeers => Set<VpnPeer>();
-        public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
+    public DbSet<VpnNode> VpnNodes => Set<VpnNode>();
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreating(modelBuilder);
+    public DbSet<VpnPeer> VpnPeers => Set<VpnPeer>();
 
-            modelBuilder.Entity<VpnNode>(b =>
-            {
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-                b.Property(x => x.InterfaceName).HasMaxLength(50).IsRequired();
-                b.Property(x => x.ServerAddressCidr).HasMaxLength(100).IsRequired();
-                b.Property(x => x.AgentToken).HasMaxLength(200).IsRequired();
-            });
+    public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
 
-           modelBuilder.Entity<VpnPeer>(b =>
-{
-    b.HasKey(x => x.Id);
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
 
-    b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-    b.Property(x => x.PublicKey).HasColumnType("text").IsRequired();
-    b.Property(x => x.AssignedIp).HasMaxLength(100).IsRequired();
-    b.Property(x => x.ClientConfig).HasColumnType("text");
+        builder.Entity<VpnNode>()
+            .HasMany(x => x.Peers)
+            .WithOne()
+            .HasForeignKey(x => x.VpnNodeId);
 
-    b.HasOne(x => x.VpnNode)
-        .WithMany(n => n.Peers)   // ✅ 關鍵
-        .HasForeignKey(x => x.VpnNodeId);
-});
+        builder.Entity<VpnPeer>()
+            .Property(x => x.Name)
+            .HasMaxLength(100);
 
-            modelBuilder.Entity<SyncJob>(b =>
-            {
-                b.HasKey(x => x.Id);
-                b.Property(x => x.Status).HasMaxLength(50).IsRequired();
-                b.Property(x => x.JobType).HasMaxLength(100).IsRequired();
-                b.Property(x => x.PayloadJson).HasColumnType("text");
-                b.Property(x => x.ResultMessage).HasColumnType("text");
-
-                b.HasOne<VpnNode>()
-                    .WithMany()
-                    .HasForeignKey(x => x.VpnNodeId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-        }
+        builder.Entity<SyncJob>()
+            .Property(x => x.Status)
+            .HasMaxLength(50);
     }
 }

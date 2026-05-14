@@ -559,7 +559,9 @@
       },
       "VpnProduct.Infrastructure/1.0.0": {
         "dependencies": {
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "10.0.8",
           "Microsoft.EntityFrameworkCore": "10.0.8",
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.8",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.1",
           "VpnProduct.Application": "1.0.0",
           "VpnProduct.Domain": "1.0.0"
