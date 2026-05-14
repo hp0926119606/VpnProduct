@@ -129,3 +129,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.genruntimeconfig.cache
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\ref\VpnProduct.Web.dll
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.sourcelink.json
+C:\Projects\VpnProductClean\src\VpnProduct.Web\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
