@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VpnProduct.Agent")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+08e17d8ad2969820354adfa8997da675e3b746c9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7983b398cd7c4a1295ceb2ea42c225b1dfee6767")]
 [assembly: System.Reflection.AssemblyProductAttribute("VpnProduct.Agent")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VpnProduct.Agent")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

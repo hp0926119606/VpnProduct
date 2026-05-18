@@ -50,4 +50,36 @@ public class AdminController : ControllerBase
             expireAtUtc = subscription.ExpireAtUtc
         });
     }
+
+    [HttpPost("disable-subscription")]
+    public async Task<IActionResult> DisableSubscription(
+        [FromBody] DisableSubscriptionRequest request)
+    {
+        var subscription = await _db.Subscriptions
+            .FirstOrDefaultAsync(x =>
+                x.UserEmail == request.UserEmail &&
+                x.IsActive);
+
+        if (subscription == null)
+        {
+            return NotFound();
+        }
+
+        subscription.IsActive = false;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            userEmail = subscription.UserEmail,
+            isActive = subscription.IsActive
+        });
+    }
+
+
+
+
+
+
 }
