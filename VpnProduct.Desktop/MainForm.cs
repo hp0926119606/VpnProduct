@@ -1,234 +1,212 @@
 using System.Diagnostics;
-using System.Text;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace VpnProduct.Desktop;
 
 public class MainForm : Form
 {
-    private readonly TextBox apiUrlTextBox = new();
-    private readonly TextBox emailTextBox = new();
-    private readonly TextBox passwordTextBox = new();
-
-    private readonly Button connectButton = new();
-    private readonly Button disconnectButton = new();
-
-    private readonly Label statusLabel = new();
+    private readonly TextBox txtApiUrl = new();
+    private readonly TextBox txtEmail = new();
+    private readonly TextBox txtPassword = new();
+    private readonly Button btnConnect = new();
+    private readonly Button btnDisconnect = new();
+    private readonly TextBox txtLog = new();
 
     public MainForm()
     {
         Text = "VpnProduct Client";
+        Width = 720;
+        Height = 560;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(760, 460);
-        Size = new Size(760, 460);
+        Font = new Font("Microsoft JhengHei UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
 
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(24),
-            ColumnCount = 2,
-            RowCount = 6
-        };
+        var lblApi = new Label { Text = "API URL", Left = 20, Top = 20, Width = 120 };
+        txtApiUrl.Left = 20;
+        txtApiUrl.Top = 45;
+        txtApiUrl.Width = 640;
+        txtApiUrl.Text = "http://61.70.3.87:5049";
 
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var lblEmail = new Label { Text = "Email", Left = 20, Top = 90, Width = 120 };
+        txtEmail.Left = 20;
+        txtEmail.Top = 115;
+        txtEmail.Width = 640;
 
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var lblPassword = new Label { Text = "Password", Left = 20, Top = 160, Width = 120 };
+        txtPassword.Left = 20;
+        txtPassword.Top = 185;
+        txtPassword.Width = 640;
+        txtPassword.PasswordChar = '*';
 
-        var apiLabel = new Label
-        {
-            Text = "API URL",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
+        btnConnect.Text = "Login & Connect";
+        btnConnect.Left = 20;
+        btnConnect.Top = 240;
+        btnConnect.Width = 220;
+        btnConnect.Height = 45;
+        btnConnect.Click += BtnConnect_Click;
 
-        apiUrlTextBox.Dock = DockStyle.Fill;
-        apiUrlTextBox.Text = "http://61.70.3.87:5049";
+        btnDisconnect.Text = "Disconnect";
+        btnDisconnect.Left = 260;
+        btnDisconnect.Top = 240;
+        btnDisconnect.Width = 180;
+        btnDisconnect.Height = 45;
+        btnDisconnect.Click += BtnDisconnect_Click;
 
-        var emailLabel = new Label
-        {
-            Text = "Email",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
+        txtLog.Left = 20;
+        txtLog.Top = 310;
+        txtLog.Width = 640;
+        txtLog.Height = 170;
+        txtLog.Multiline = true;
+        txtLog.ScrollBars = ScrollBars.Vertical;
 
-        emailTextBox.Dock = DockStyle.Fill;
-
-        var passwordLabel = new Label
-        {
-            Text = "Password",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-
-        passwordTextBox.Dock = DockStyle.Fill;
-        passwordTextBox.UseSystemPasswordChar = true;
-
-        var buttonPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight
-        };
-
-        connectButton.Text = "Login & Connect";
-        connectButton.Width = 180;
-        connectButton.Height = 44;
-
-        disconnectButton.Text = "Disconnect";
-        disconnectButton.Width = 180;
-        disconnectButton.Height = 44;
-
-        buttonPanel.Controls.Add(connectButton);
-        buttonPanel.Controls.Add(disconnectButton);
-
-        statusLabel.Text = "Status: Idle";
-        statusLabel.Dock = DockStyle.Fill;
-        statusLabel.AutoSize = false;
-        statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-
-        root.Controls.Add(apiLabel, 0, 0);
-        root.Controls.Add(apiUrlTextBox, 1, 0);
-
-        root.Controls.Add(emailLabel, 0, 1);
-        root.Controls.Add(emailTextBox, 1, 1);
-
-        root.Controls.Add(passwordLabel, 0, 2);
-        root.Controls.Add(passwordTextBox, 1, 2);
-
-        root.Controls.Add(buttonPanel, 1, 3);
-
-        root.Controls.Add(statusLabel, 0, 4);
-        root.SetColumnSpan(statusLabel, 2);
-
-        Controls.Add(root);
-
-        connectButton.Click += ConnectButton_Click;
-        disconnectButton.Click += DisconnectButton_Click;
+        Controls.Add(lblApi);
+        Controls.Add(txtApiUrl);
+        Controls.Add(lblEmail);
+        Controls.Add(txtEmail);
+        Controls.Add(lblPassword);
+        Controls.Add(txtPassword);
+        Controls.Add(btnConnect);
+        Controls.Add(btnDisconnect);
+        Controls.Add(txtLog);
     }
 
-    private async void ConnectButton_Click(object? sender, EventArgs e)
+    private async void BtnConnect_Click(object? sender, EventArgs e)
     {
         try
         {
-            var apiUrl = apiUrlTextBox.Text.Trim().TrimEnd('/');
-            var email = emailTextBox.Text.Trim();
-            var password = passwordTextBox.Text;
+            btnConnect.Enabled = false;
 
-            if (string.IsNullOrWhiteSpace(apiUrl) ||
-                string.IsNullOrWhiteSpace(email) ||
-                string.IsNullOrWhiteSpace(password))
-            {
-                statusLabel.Text = "Status: API URL, Email, Password are required.";
-                return;
-            }
-
-            statusLabel.Text = "Status: Logging in...";
+            Log("Login...");
 
             using var http = new HttpClient();
 
-            var loginBody = JsonSerializer.Serialize(new
-            {
-                email,
-                password
-            });
+            var apiUrl = txtApiUrl.Text.Trim().TrimEnd('/');
 
-            var loginResponse = await http.PostAsync(
+            var response = await http.PostAsJsonAsync(
                 $"{apiUrl}/api/auth/login",
-                new StringContent(loginBody, Encoding.UTF8, "application/json"));
+                new
+                {
+                    email = txtEmail.Text.Trim(),
+                    password = txtPassword.Text
+                });
 
-            var loginJson = await loginResponse.Content.ReadAsStringAsync();
+            var json = await response.Content.ReadAsStringAsync();
+            Log(json);
 
-            if (!loginResponse.IsSuccessStatusCode)
-            {
-                statusLabel.Text = $"Status: Login HTTP error {loginResponse.StatusCode}";
-                return;
-            }
-
-            var login = JsonSerializer.Deserialize<LoginResult>(
-                loginJson,
+            var result = JsonSerializer.Deserialize<LoginResponse>(
+                json,
                 new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-            if (login == null || !login.Success)
+            if (result == null || !result.Success)
             {
-                statusLabel.Text = $"Status: Login failed. {login?.Message}";
+                MessageBox.Show(result?.Message ?? "Login failed");
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(login.PeerId))
-            {
-                statusLabel.Text = "Status: Login OK, but no VPN peer assigned.";
-                return;
-            }
+            Log("Downloading config...");
 
-            statusLabel.Text = "Status: Downloading config...";
-
-            var configUrl = $"{apiUrl}/api/vpnpeers/{login.PeerId}/config-file";
-            var config = await http.GetStringAsync(configUrl);
+            var conf = await http.GetStringAsync(
+                $"{apiUrl}/api/vpnpeers/{result.PeerId}/config-file");
 
             Directory.CreateDirectory(@"C:\ProgramData\VpnProduct");
 
             var confPath = @"C:\ProgramData\VpnProduct\wg0.conf";
-            await File.WriteAllTextAsync(confPath, config);
 
-            statusLabel.Text = "Status: Starting tunnel...";
+            await File.WriteAllTextAsync(confPath, conf);
 
-            var wgExe = @"C:\Program Files\WireGuard\wireguard.exe";
+            Log("Config saved.");
 
-            if (!File.Exists(wgExe))
+            var wireGuardExe = @"C:\Program Files\WireGuard\wireguard.exe";
+
+            if (!File.Exists(wireGuardExe))
             {
-                statusLabel.Text = "Status: WireGuard not installed.";
+                MessageBox.Show("WireGuard not installed.");
                 return;
             }
 
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = wgExe,
-                Arguments = $"/installtunnelservice \"{confPath}\"",
-                Verb = "runas",
-                UseShellExecute = true
-            });
+            Log("Removing old tunnel if exists...");
+            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0");
+            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0");
 
-            statusLabel.Text = "Status: Connected";
+            await Task.Delay(1200);
+
+            Log("Starting tunnel...");
+
+            RunAdmin(
+                wireGuardExe,
+                $"/installtunnelservice \"{confPath}\"");
+
+            Log("Connected.");
+            MessageBox.Show("VPN Connected");
         }
         catch (Exception ex)
         {
-            statusLabel.Text = "Status: " + ex.Message;
+            Log(ex.ToString());
+            MessageBox.Show(ex.Message);
+        }
+        finally
+        {
+            btnConnect.Enabled = true;
         }
     }
 
-    private void DisconnectButton_Click(object? sender, EventArgs e)
+    private async void BtnDisconnect_Click(object? sender, EventArgs e)
     {
         try
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "sc.exe",
-                Arguments = "stop WireGuardTunnel$wg0",
-                Verb = "runas",
-                UseShellExecute = true
-            });
+            btnDisconnect.Enabled = false;
 
-            statusLabel.Text = "Status: Disconnected";
+            Log("Stopping tunnel...");
+
+            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0");
+
+            await Task.Delay(1200);
+
+            Log("Deleting tunnel service...");
+
+            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0");
+
+            Log("Disconnected.");
+            MessageBox.Show("VPN Disconnected");
         }
         catch (Exception ex)
         {
-            statusLabel.Text = "Status: " + ex.Message;
+            Log(ex.ToString());
+            MessageBox.Show(ex.Message);
+        }
+        finally
+        {
+            btnDisconnect.Enabled = true;
         }
     }
 
-    private sealed class LoginResult
+    private static void RunAdmin(string fileName, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            Verb = "runas",
+            UseShellExecute = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+
+        process?.WaitForExit();
+    }
+
+    private void Log(string text)
+    {
+        txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {text}{Environment.NewLine}");
+    }
+
+    private sealed class LoginResponse
     {
         public bool Success { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public string PeerId { get; set; } = string.Empty;
+        public string Message { get; set; } = "";
+        public string PeerId { get; set; } = "";
     }
 }

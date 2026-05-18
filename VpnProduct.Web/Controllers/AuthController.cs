@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using VpnProduct.Application.Interfaces;
 using VpnProduct.Application.Models.VpnPeers;
+using VpnProduct.Domain.Entities;
 using VpnProduct.Infrastructure.Data;
 using VpnProduct.Web.Models;
 
@@ -75,6 +76,17 @@ public class AuthController : ControllerBase
             });
         }
 
+        _db.Subscriptions.Add(new Subscription
+        {
+            Id = Guid.NewGuid(),
+            UserEmail = email,
+            StartAtUtc = DateTime.UtcNow,
+            ExpireAtUtc = DateTime.UtcNow.AddDays(7),
+            IsActive = true
+        });
+
+        await _db.SaveChangesAsync();
+
         var createdPeer = await _vpnPeerService.CreateAsync(new CreateVpnPeerRequest
         {
             VpnNodeId = DefaultVpnNodeId,
@@ -114,6 +126,29 @@ public class AuthController : ControllerBase
             {
                 Success = false,
                 Message = "Password invalid"
+            });
+        }
+
+        var subscription = await _db.Subscriptions
+            .FirstOrDefaultAsync(x =>
+                x.UserEmail == email &&
+                x.IsActive);
+
+        if (subscription == null)
+        {
+            return Ok(new LoginResponse
+            {
+                Success = false,
+                Message = "Subscription not found"
+            });
+        }
+
+        if (subscription.ExpireAtUtc <= DateTime.UtcNow)
+        {
+            return Ok(new LoginResponse
+            {
+                Success = false,
+                Message = "Subscription expired"
             });
         }
 

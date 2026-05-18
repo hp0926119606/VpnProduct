@@ -20,6 +20,7 @@ public class ApplicationDbContext
     public DbSet<VpnPeer> VpnPeers => Set<VpnPeer>();
 
     public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
+public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -37,5 +38,9 @@ public class ApplicationDbContext
         builder.Entity<SyncJob>()
             .Property(x => x.Status)
             .HasMaxLength(50);
+
+builder.Entity<Subscription>()
+    .Property(x => x.UserEmail)
+    .HasMaxLength(200);
     }
 }
