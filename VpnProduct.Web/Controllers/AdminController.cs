@@ -77,6 +77,41 @@ public class AdminController : ControllerBase
         });
     }
 
+    [HttpPost("enable-subscription")]
+    public async Task<IActionResult> EnableSubscription(
+        [FromBody] EnableSubscriptionRequest request)
+    {
+        var subscription = await _db.Subscriptions
+            .FirstOrDefaultAsync(x =>
+                x.UserEmail == request.UserEmail);
+
+        if (subscription == null)
+        {
+            return NotFound();
+        }
+
+        subscription.IsActive = true;
+
+        if (subscription.ExpireAtUtc < DateTime.UtcNow)
+        {
+            subscription.ExpireAtUtc = DateTime.UtcNow.AddDays(request.Days);
+        }
+        else
+        {
+            subscription.ExpireAtUtc = subscription.ExpireAtUtc.AddDays(request.Days);
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            userEmail = subscription.UserEmail,
+            isActive = subscription.IsActive,
+            expireAtUtc = subscription.ExpireAtUtc
+        });
+    }
+
 
 
 
