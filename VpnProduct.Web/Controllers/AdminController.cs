@@ -112,6 +112,26 @@ public class AdminController : ControllerBase
         });
     }
 
+    [HttpGet("subscriptions")]
+    public async Task<IActionResult> GetSubscriptions()
+    {
+        var now = DateTime.UtcNow;
+
+        var subscriptions = await _db.Subscriptions
+            .OrderBy(x => x.ExpireAtUtc)
+            .Select(x => new
+            {
+                x.UserEmail,
+                x.StartAtUtc,
+                x.ExpireAtUtc,
+                x.IsActive,
+                IsExpired = x.ExpireAtUtc <= now
+            })
+            .ToListAsync();
+
+        return Ok(subscriptions);
+    }
+
 
 
 
