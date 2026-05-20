@@ -8,15 +8,125 @@
   <h2>Admin - Subscriptions</h2>
 
   <button onclick="load()">Refresh</button>
+  <button onclick="logout()">Logout</button>
+
+  <hr>
+
+  <h3>Extend Subscription</h3>
+  <input id="extendEmail" placeholder="User Email" style="width:260px">
+  <input id="extendDays" placeholder="Days" value="30" style="width:80px">
+  <button onclick="extendSub()">Extend</button>
+
+  <h3>Disable Subscription</h3>
+  <input id="disableEmail" placeholder="User Email" style="width:260px">
+  <button onclick="disableSub()">Disable</button>
+
+  <h3>Enable Subscription</h3>
+  <input id="enableEmail" placeholder="User Email" style="width:260px">
+  <input id="enableDays" placeholder="Days" value="30" style="width:80px">
+  <button onclick="enableSub()">Enable</button>
+
+  <hr>
 
   <pre id="result"></pre>
 
   <script>
+    function getToken() {
+      const token = localStorage.getItem("adminToken");
+
+      if (!token) {
+        location.href = "/admin/login.html";
+        return "";
+      }
+
+      return token;
+    }
+
+    function logout() {
+      localStorage.removeItem("adminToken");
+      location.href = "/admin/login.html";
+    }
+
     async function load() {
-      const res = await fetch("/api/admin/subscriptions");
+      const token = getToken();
+
+      const res = await fetch("/api/admin/subscriptions", {
+        headers: {
+          "X-Admin-Token": token
+        }
+      });
+
+      if (res.status === 401) {
+        logout();
+        return;
+      }
+
       const json = await res.json();
+
       document.getElementById("result").innerText =
         JSON.stringify(json, null, 2);
+    }
+
+    async function extendSub() {
+      const token = getToken();
+
+      const res = await fetch("/api/admin/extend-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          userEmail: document.getElementById("extendEmail").value,
+          days: parseInt(document.getElementById("extendDays").value)
+        })
+      });
+
+      document.getElementById("result").innerText =
+        await res.text();
+
+      await load();
+    }
+
+    async function disableSub() {
+      const token = getToken();
+
+      const res = await fetch("/api/admin/disable-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          userEmail: document.getElementById("disableEmail").value
+        })
+      });
+
+      document.getElementById("result").innerText =
+        await res.text();
+
+      await load();
+    }
+
+    async function enableSub() {
+      const token = getToken();
+
+      const res = await fetch("/api/admin/enable-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          userEmail: document.getElementById("enableEmail").value,
+          days: parseInt(document.getElementById("enableDays").value)
+        })
+      });
+
+      document.getElementById("result").innerText =
+        await res.text();
+
+      await load();
     }
 
     load();

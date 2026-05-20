@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin Login</title>
+</head>
+<body>
+  <h2>Admin Login</h2>
+
+  <div>
+    <label>Admin Token</label><br>
+    <input id="token" type="password" style="width:300px">
+  </div>
+
+  <br>
+
+  <button onclick="login()">Login</button>
+
+  <pre id="result"></pre>
+
+  <script>
+    function login() {
+      const token = document.getElementById("token").value;
+
+      if (!token) {
+        document.getElementById("result").innerText = "Token required.";
+        return;
+      }
+
+      localStorage.setItem("adminToken", token);
+
+      location.href = "/admin/subscriptions.html";
+    }
+  </script>
+</body>
+</html>
