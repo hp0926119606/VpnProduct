@@ -135,3 +135,4 @@ C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\sccp
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\c68pckw53b-{0}-v9z3j4pn1y-v9z3j4pn1y.gz
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\jefquf9x2y-{0}-95y3l34olu-95y3l34olu.gz
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\14tly3x2az-{0}-ulwxh0zwre-ulwxh0zwre.gz
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\f6yknzlhgn-{0}-85jl4worqp-85jl4worqp.gz
