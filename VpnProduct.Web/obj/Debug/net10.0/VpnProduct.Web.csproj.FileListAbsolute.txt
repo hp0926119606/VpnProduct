@@ -131,8 +131,8 @@ C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\ref\VpnProduct.
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\VpnProduct.Web.sourcelink.json
 C:\Projects\VpnProductClean\src\VpnProduct.Web\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
 C:\Projects\VpnProductClean\src\VpnProduct.Web\bin\Debug\net10.0\VpnProduct.Web.staticwebassets.runtime.json
-C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\sccp0vicvi-{0}-mvzmvulfcg-mvzmvulfcg.gz
-C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\c68pckw53b-{0}-v9z3j4pn1y-v9z3j4pn1y.gz
-C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\jefquf9x2y-{0}-95y3l34olu-95y3l34olu.gz
-C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\14tly3x2az-{0}-ulwxh0zwre-ulwxh0zwre.gz
 C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\f6yknzlhgn-{0}-85jl4worqp-85jl4worqp.gz
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\jefquf9x2y-{0}-b9z192dedu-b9z192dedu.gz
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\14tly3x2az-{0}-6g3rlwg0lq-6g3rlwg0lq.gz
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\sccp0vicvi-{0}-x9oynion94-x9oynion94.gz
+C:\Projects\VpnProductClean\src\VpnProduct.Web\obj\Debug\net10.0\compressed\c68pckw53b-{0}-jevjhm8oh1-jevjhm8oh1.gz
