@@ -6,69 +6,99 @@ namespace VpnProduct.Desktop;
 
 public class MainForm : Form
 {
-    private readonly TextBox txtApiUrl = new();
+    private const string AppVersion = "2.0.0";
+    private const string ApiBaseUrl = "https://yct.myftp.org";
+
     private readonly TextBox txtEmail = new();
     private readonly TextBox txtPassword = new();
     private readonly Button btnConnect = new();
     private readonly Button btnDisconnect = new();
     private readonly TextBox txtLog = new();
+    private readonly Label lblServer = new();
+    private readonly Label lblStatus = new();
 
     public MainForm()
     {
-        Text = "VpnProduct Client";
+        Text = $"VpnProduct Client v{AppVersion}";
         Width = 720;
         Height = 560;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Microsoft JhengHei UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
 
-        var lblApi = new Label { Text = "API URL", Left = 20, Top = 20, Width = 120 };
-        txtApiUrl.Left = 20;
-        txtApiUrl.Top = 45;
-        txtApiUrl.Width = 640;
-        txtApiUrl.Text = "http://61.70.3.87:5049";
+        lblServer.Text = $"Server: {ApiBaseUrl}";
+        lblServer.Left = 20;
+        lblServer.Top = 20;
+        lblServer.Width = 640;
+        lblServer.Height = 28;
 
-        var lblEmail = new Label { Text = "Email", Left = 20, Top = 90, Width = 120 };
+        var lblEmail = new Label
+        {
+            Text = "Email",
+            Left = 20,
+            Top = 65,
+            Width = 120
+        };
+
         txtEmail.Left = 20;
-        txtEmail.Top = 115;
+        txtEmail.Top = 90;
         txtEmail.Width = 640;
 
-        var lblPassword = new Label { Text = "Password", Left = 20, Top = 160, Width = 120 };
+        var lblPassword = new Label
+        {
+            Text = "Password",
+            Left = 20,
+            Top = 135,
+            Width = 120
+        };
+
         txtPassword.Left = 20;
-        txtPassword.Top = 185;
+        txtPassword.Top = 160;
         txtPassword.Width = 640;
         txtPassword.PasswordChar = '*';
 
-        btnConnect.Text = "Login & Connect";
+        btnConnect.Text = "Connect";
         btnConnect.Left = 20;
-        btnConnect.Top = 240;
-        btnConnect.Width = 220;
+        btnConnect.Top = 215;
+        btnConnect.Width = 180;
         btnConnect.Height = 45;
         btnConnect.Click += BtnConnect_Click;
 
         btnDisconnect.Text = "Disconnect";
-        btnDisconnect.Left = 260;
-        btnDisconnect.Top = 240;
+        btnDisconnect.Left = 220;
+        btnDisconnect.Top = 215;
         btnDisconnect.Width = 180;
         btnDisconnect.Height = 45;
         btnDisconnect.Click += BtnDisconnect_Click;
 
+        lblStatus.Text = "Status: Ready";
+        lblStatus.Left = 20;
+        lblStatus.Top = 280;
+        lblStatus.Width = 640;
+        lblStatus.Height = 28;
+
         txtLog.Left = 20;
-        txtLog.Top = 310;
+        txtLog.Top = 320;
         txtLog.Width = 640;
         txtLog.Height = 170;
         txtLog.Multiline = true;
         txtLog.ScrollBars = ScrollBars.Vertical;
+        txtLog.ReadOnly = true;
 
-        Controls.Add(lblApi);
-        Controls.Add(txtApiUrl);
+        Controls.Add(lblServer);
         Controls.Add(lblEmail);
         Controls.Add(txtEmail);
         Controls.Add(lblPassword);
         Controls.Add(txtPassword);
         Controls.Add(btnConnect);
         Controls.Add(btnDisconnect);
+        Controls.Add(lblStatus);
         Controls.Add(txtLog);
+
+        Log($"VpnProduct Client v{AppVersion}");
+        Log($"API Server: {ApiBaseUrl}");
     }
 
     private async void BtnConnect_Click(object? sender, EventArgs e)
@@ -76,23 +106,56 @@ public class MainForm : Form
         try
         {
             btnConnect.Enabled = false;
+            SetStatus("Logging in...");
+
+            var email = txtEmail.Text.Trim();
+            var password = txtPassword.Text;
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                MessageBox.Show("Please enter Email.");
+                SetStatus("Ready");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                MessageBox.Show("Please enter Password.");
+                SetStatus("Ready");
+                return;
+            }
+
+            using var http = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
 
             Log("Login...");
 
-            using var http = new HttpClient();
-
-            var apiUrl = txtApiUrl.Text.Trim().TrimEnd('/');
-
             var response = await http.PostAsJsonAsync(
-                $"{apiUrl}/api/auth/login",
+                $"{ApiBaseUrl}/api/auth/login",
                 new
                 {
-                    email = txtEmail.Text.Trim(),
-                    password = txtPassword.Text
+                    email,
+                    password
                 });
 
             var json = await response.Content.ReadAsStringAsync();
             Log(json);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                MessageBox.Show($"Login HTTP error: {response.StatusCode}");
+                SetStatus("Login failed");
+                return;
+            }
+
+            if (json.TrimStart().StartsWith("<"))
+            {
+                MessageBox.Show("Server returned HTML instead of JSON. Please check API URL / Nginx proxy.");
+                SetStatus("Server error");
+                return;
+            }
 
             var result = JsonSerializer.Deserialize<LoginResponse>(
                 json,
@@ -101,16 +164,38 @@ public class MainForm : Form
                     PropertyNameCaseInsensitive = true
                 });
 
-            if (result == null || !result.Success)
+            if (result == null)
             {
-                MessageBox.Show(result?.Message ?? "Login failed");
+                MessageBox.Show("Login response parse failed.");
+                SetStatus("Login failed");
                 return;
             }
 
+            if (!result.Success)
+            {
+                MessageBox.Show(result.Message);
+
+                if (result.Message.Contains("expired", StringComparison.OrdinalIgnoreCase))
+                {
+                    SetStatus("Subscription expired");
+                }
+                else if (result.Message.Contains("confirm", StringComparison.OrdinalIgnoreCase))
+                {
+                    SetStatus("Email not confirmed");
+                }
+                else
+                {
+                    SetStatus("Login failed");
+                }
+
+                return;
+            }
+
+            SetStatus("Downloading config...");
             Log("Downloading config...");
 
             var conf = await http.GetStringAsync(
-                $"{apiUrl}/api/vpnpeers/{result.PeerId}/config-file");
+                $"{ApiBaseUrl}/api/vpnpeers/{result.PeerId}/config-file");
 
             Directory.CreateDirectory(@"C:\ProgramData\VpnProduct");
 
@@ -118,35 +203,38 @@ public class MainForm : Form
 
             await File.WriteAllTextAsync(confPath, conf);
 
-            Log("Config saved.");
+            Log("Config saved:");
+            Log(confPath);
 
-            var wireGuardExe = @"C:\Program Files\WireGuard\wireguard.exe";
+            EnsureWireGuardInstalled();
 
-            if (!File.Exists(wireGuardExe))
-            {
-                MessageBox.Show("WireGuard not installed.");
-                return;
-            }
-
+            SetStatus("Removing old tunnel...");
             Log("Removing old tunnel if exists...");
-            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0");
-            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0");
+
+            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0", ignoreError: true);
+            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0", ignoreError: true);
 
             await Task.Delay(1200);
 
+            SetStatus("Starting tunnel...");
             Log("Starting tunnel...");
+
+            var wireGuardExe = GetWireGuardExePath();
 
             RunAdmin(
                 wireGuardExe,
                 $"/installtunnelservice \"{confPath}\"");
 
+            SetStatus("Connected");
             Log("Connected.");
+
             MessageBox.Show("VPN Connected");
         }
         catch (Exception ex)
         {
             Log(ex.ToString());
             MessageBox.Show(ex.Message);
+            SetStatus("Error");
         }
         finally
         {
@@ -160,23 +248,28 @@ public class MainForm : Form
         {
             btnDisconnect.Enabled = false;
 
+            SetStatus("Stopping tunnel...");
             Log("Stopping tunnel...");
 
-            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0");
+            RunAdmin("sc.exe", "stop WireGuardTunnel$wg0", ignoreError: true);
 
             await Task.Delay(1200);
 
+            SetStatus("Deleting tunnel service...");
             Log("Deleting tunnel service...");
 
-            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0");
+            RunAdmin("sc.exe", "delete WireGuardTunnel$wg0", ignoreError: true);
 
+            SetStatus("Disconnected");
             Log("Disconnected.");
+
             MessageBox.Show("VPN Disconnected");
         }
         catch (Exception ex)
         {
             Log(ex.ToString());
             MessageBox.Show(ex.Message);
+            SetStatus("Error");
         }
         finally
         {
@@ -184,18 +277,105 @@ public class MainForm : Form
         }
     }
 
-    private static void RunAdmin(string fileName, string arguments)
+    private static string GetWireGuardExePath()
     {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            Verb = "runas",
-            UseShellExecute = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        });
+        var path = @"C:\Program Files\WireGuard\wireguard.exe";
 
-        process?.WaitForExit();
+        if (File.Exists(path))
+        {
+            return path;
+        }
+
+        var x86Path = @"C:\Program Files (x86)\WireGuard\wireguard.exe";
+
+        if (File.Exists(x86Path))
+        {
+            return x86Path;
+        }
+
+        return path;
+    }
+
+    private void EnsureWireGuardInstalled()
+    {
+        var wireGuardExe = GetWireGuardExePath();
+
+        if (File.Exists(wireGuardExe))
+        {
+            Log("WireGuard detected.");
+            return;
+        }
+
+        var msiPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "wireguard-amd64-1.1.msi");
+
+        if (!File.Exists(msiPath))
+        {
+            MessageBox.Show(
+                "WireGuard is not installed and installer file was not found.\n\n" +
+                "Expected:\n" + msiPath);
+
+            throw new FileNotFoundException("WireGuard installer not found.", msiPath);
+        }
+
+        SetStatus("Installing VPN components...");
+        Log("WireGuard not found. Installing...");
+
+        RunAdmin(
+            "msiexec.exe",
+            $"/i \"{msiPath}\" /quiet /norestart");
+
+        Task.Delay(2000).Wait();
+
+        RunAdmin(
+            "taskkill.exe",
+            "/IM wireguard.exe /F",
+            ignoreError: true);
+
+        wireGuardExe = GetWireGuardExePath();
+
+        if (!File.Exists(wireGuardExe))
+        {
+            throw new FileNotFoundException(
+                "WireGuard installation completed but wireguard.exe was not found.",
+                wireGuardExe);
+        }
+
+        Log("WireGuard installed.");
+    }
+
+    private static void RunAdmin(
+        string fileName,
+        string arguments,
+        bool ignoreError = false)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                Verb = "runas",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+
+            process?.WaitForExit();
+        }
+        catch
+        {
+            if (!ignoreError)
+            {
+                throw;
+            }
+        }
+    }
+
+    private void SetStatus(string status)
+    {
+        lblStatus.Text = $"Status: {status}";
+        Log($"Status: {status}");
     }
 
     private void Log(string text)

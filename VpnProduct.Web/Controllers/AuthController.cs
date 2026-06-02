@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+
+using System.Text;
 
 using VpnProduct.Application.Interfaces;
 using VpnProduct.Application.Models.VpnPeers;
@@ -20,15 +23,21 @@ public class AuthController : ControllerBase
     private readonly UserManager<IdentityUser> _userManager;
     private readonly ApplicationDbContext _db;
     private readonly IVpnPeerService _vpnPeerService;
+    private readonly IEmailSender _emailSender;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         UserManager<IdentityUser> userManager,
         ApplicationDbContext db,
-        IVpnPeerService vpnPeerService)
+        IVpnPeerService vpnPeerService,
+        IEmailSender emailSender,
+        IConfiguration configuration)
     {
         _userManager = userManager;
         _db = db;
         _vpnPeerService = vpnPeerService;
+        _emailSender = emailSender;
+        _configuration = configuration;
     }
 
     [HttpPost("register")]
@@ -61,7 +70,7 @@ public class AuthController : ControllerBase
         {
             UserName = email,
             Email = email,
-            EmailConfirmed = true
+            EmailConfirmed = false
         };
 
         var createUserResult =
@@ -93,12 +102,64 @@ public class AuthController : ControllerBase
             Name = email
         });
 
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+        var encodedToken = WebEncoders.Base64UrlEncode(
+            Encoding.UTF8.GetBytes(token));
+
+        var publicBaseUrl =
+            _configuration["VpnProduct:PublicBaseUrl"] ??
+            "https://yct.myftp.org";
+
+        var confirmUrl =
+            $"{publicBaseUrl.TrimEnd('/')}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+
+        var html =
+            $"""
+            <h2>VpnProduct Email Confirmation</h2>
+            <p>請點擊以下連結完成 Email 驗證：</p>
+            <p><a href="{confirmUrl}">確認 Email</a></p>
+            <p>如果你沒有註冊 VpnProduct，請忽略此信。</p>
+            """;
+
+        await _emailSender.SendAsync(
+            email,
+            "VpnProduct Email Confirmation",
+            html);
+
         return Ok(new RegisterResponse
         {
             Success = true,
-            Message = "OK",
+            Message = "Registration successful. Please check your email to confirm your account.",
             PeerId = createdPeer.Id.ToString()
         });
+    }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail(
+        [FromQuery] string userId,
+        [FromQuery] string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+
+        if (user == null)
+        {
+            return Content("User not found.");
+        }
+
+        var decodedToken = Encoding.UTF8.GetString(
+            WebEncoders.Base64UrlDecode(token));
+
+        var result = await _userManager.ConfirmEmailAsync(
+            user,
+            decodedToken);
+
+        if (!result.Succeeded)
+        {
+            return Content("Email confirmation failed.");
+        }
+
+        return Content("Email confirmed. You can now login to VpnProduct Client.");
     }
 
     [HttpPost("login")]
@@ -114,6 +175,15 @@ public class AuthController : ControllerBase
             {
                 Success = false,
                 Message = "User not found"
+            });
+        }
+
+        if (!user.EmailConfirmed)
+        {
+            return Ok(new LoginResponse
+            {
+                Success = false,
+                Message = "Email not confirmed"
             });
         }
 
