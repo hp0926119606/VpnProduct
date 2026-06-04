@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VpnProduct Users</title>
+
+<style>
+body{
+    font-family:Arial;
+    margin:20px;
+}
+
+table{
+    border-collapse:collapse;
+    width:100%;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:6px;
+    font-size:12px;
+}
+
+th{
+    background:#f0f0f0;
+}
+
+input{
+    padding:5px;
+}
+
+button{
+    padding:5px 10px;
+}
+
+.top{
+    margin-bottom:15px;
+}
+</style>
+
+</head>
+<body>
+
+<h2>VpnProduct Users</h2>
+
+<div class="top">
+
+Admin Token
+
+<input id="token" style="width:220px"
+value="admin-123456">
+
+Search
+
+<input id="search" style="width:220px">
+
+Page Size
+
+<select id="pageSize">
+<option value="50">50</option>
+<option value="100">100</option>
+</select>
+
+<button onclick="loadUsers()">
+Search
+</button>
+
+</div>
+
+<div id="summary"></div>
+
+<br>
+
+<table>
+
+<thead>
+<tr>
+<th>Email</th>
+<th>Confirmed</th>
+<th>Subscription</th>
+<th>Expire</th>
+<th>IP</th>
+<th>PublicKey</th>
+<th>Peer</th>
+</tr>
+</thead>
+
+<tbody id="rows">
+</tbody>
+
+</table>
+
+<br>
+
+<button onclick="prevPage()">Prev</button>
+
+<span id="pageInfo"></span>
+
+<button onclick="nextPage()">Next</button>
+
+<script>
+
+let currentPage=1;
+let totalPages=1;
+
+async function loadUsers()
+{
+    const token =
+        document.getElementById("token").value;
+
+    const search =
+        document.getElementById("search").value;
+
+    const pageSize =
+        document.getElementById("pageSize").value;
+
+    const res =
+        await fetch(
+            `/api/admin/users?page=${currentPage}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`,
+            {
+                headers:
+                {
+                    "X-Admin-Token":token
+                }
+            });
+
+    const data = await res.json();
+
+    totalPages=data.totalPages;
+
+    document.getElementById("summary").innerText=
+        `Total Users: ${data.totalCount}`;
+
+    document.getElementById("pageInfo").innerText=
+        `Page ${data.page}/${data.totalPages}`;
+
+    let html="";
+
+    for(const u of data.data)
+    {
+        html+=`
+        <tr>
+            <td>${u.email}</td>
+            <td>${u.emailConfirmed}</td>
+            <td>${u.subscriptionActive}</td>
+            <td>${u.subscriptionExpireAtUtc ?? ""}</td>
+            <td>${u.assignedIp ?? ""}</td>
+            <td>${u.publicKey ?? ""}</td>
+            <td>${u.peerActive}</td>
+        </tr>`;
+    }
+
+    document.getElementById("rows").innerHTML=
+        html;
+}
+
+function prevPage()
+{
+    if(currentPage>1)
+    {
+        currentPage--;
+        loadUsers();
+    }
+}
+
+function nextPage()
+{
+    if(currentPage<totalPages)
+    {
+        currentPage++;
+        loadUsers();
+    }
+}
+
+loadUsers();
+
+</script>
+
+</body>
+</html>
