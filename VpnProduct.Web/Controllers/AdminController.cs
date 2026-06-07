@@ -24,9 +24,33 @@ public class AdminController : ControllerBase
 
     private bool IsAdminAuthorized()
     {
-        var token = Request.Headers["X-Admin-Token"].ToString();
+        var token =
+            Request.Headers["X-Admin-Token"].ToString();
 
         return token == "admin-123456";
+    }
+
+    [HttpGet("user-emails")]
+    public async Task<IActionResult> GetUserEmails(
+        [FromQuery] string search = "")
+    {
+        if (!IsAdminAuthorized())
+        {
+            return Unauthorized();
+        }
+
+        search = search.Trim();
+
+        var users = await _userManager.Users
+            .Where(x =>
+                x.Email != null &&
+                x.Email.Contains(search))
+            .OrderBy(x => x.Email)
+            .Take(20)
+            .Select(x => x.Email!)
+            .ToListAsync();
+
+        return Ok(users);
     }
 
     [HttpGet("users")]
@@ -59,7 +83,8 @@ public class AdminController : ControllerBase
                 x.Email.Contains(search));
         }
 
-        var totalCount = await usersQuery.CountAsync();
+        var totalCount =
+            await usersQuery.CountAsync();
 
         var users = await usersQuery
             .OrderByDescending(x => x.Id)
@@ -82,7 +107,8 @@ public class AdminController : ControllerBase
 
         var data = users.Select(user =>
         {
-            var email = user.Email ?? "";
+            var email =
+                user.Email ?? "";
 
             var sub = subscriptions
                 .Where(x => x.UserEmail == email)
@@ -100,14 +126,28 @@ public class AdminController : ControllerBase
                 Email = email,
                 user.UserName,
                 user.EmailConfirmed,
-                SubscriptionActive = sub?.IsActive ?? false,
-                SubscriptionExpireAtUtc = sub?.ExpireAtUtc,
-                IsExpired = sub != null && sub.ExpireAtUtc <= DateTime.UtcNow,
-                PeerId = peer?.Id,
-                AssignedIp = peer?.AssignedIp,
-                PublicKey = peer?.PublicKey,
-                
-                PeerActive = peer?.IsActive ?? false
+
+                SubscriptionActive =
+                    sub?.IsActive ?? false,
+
+                SubscriptionExpireAtUtc =
+                    sub?.ExpireAtUtc,
+
+                IsExpired =
+                    sub != null &&
+                    sub.ExpireAtUtc <= DateTime.UtcNow,
+
+                PeerId =
+                    peer?.Id,
+
+                AssignedIp =
+                    peer?.AssignedIp,
+
+                PublicKey =
+                    peer?.PublicKey,
+
+                PeerActive =
+                    peer?.IsActive ?? false
             };
         });
 
@@ -116,7 +156,9 @@ public class AdminController : ControllerBase
             page,
             pageSize,
             totalCount,
-            totalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            totalPages =
+                (int)Math.Ceiling(
+                    totalCount / (double)pageSize),
             data
         });
     }
@@ -129,7 +171,8 @@ public class AdminController : ControllerBase
             return Unauthorized();
         }
 
-        var now = DateTime.UtcNow;
+        var now =
+            DateTime.UtcNow;
 
         var subscriptions = await _db.Subscriptions
             .OrderBy(x => x.ExpireAtUtc)
@@ -139,7 +182,8 @@ public class AdminController : ControllerBase
                 x.StartAtUtc,
                 x.ExpireAtUtc,
                 x.IsActive,
-                IsExpired = x.ExpireAtUtc <= now
+                IsExpired =
+                    x.ExpireAtUtc <= now
             })
             .ToListAsync();
 
@@ -181,7 +225,8 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            expireAtUtc = subscription.ExpireAtUtc
+            expireAtUtc =
+                subscription.ExpireAtUtc
         });
     }
 
@@ -211,8 +256,10 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            userEmail = subscription.UserEmail,
-            isActive = subscription.IsActive
+            userEmail =
+                subscription.UserEmail,
+            isActive =
+                subscription.IsActive
         });
     }
 
@@ -252,9 +299,12 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            userEmail = subscription.UserEmail,
-            isActive = subscription.IsActive,
-            expireAtUtc = subscription.ExpireAtUtc
+            userEmail =
+                subscription.UserEmail,
+            isActive =
+                subscription.IsActive,
+            expireAtUtc =
+                subscription.ExpireAtUtc
         });
     }
 }

@@ -10,6 +10,10 @@ body{
     margin:20px;
 }
 
+.menu{
+    margin-bottom:20px;
+}
+
 table{
     border-collapse:collapse;
     width:100%;
@@ -19,75 +23,113 @@ th,td{
     border:1px solid #ccc;
     padding:6px;
     font-size:12px;
+    vertical-align:top;
 }
 
 th{
     background:#f0f0f0;
 }
 
-input{
+input,select{
     padding:5px;
 }
 
 button{
     padding:5px 10px;
+    margin:2px;
 }
 
-.top{
-    margin-bottom:15px;
+.ok{
+    color:green;
+    font-weight:bold;
+}
+
+.bad{
+    color:red;
+    font-weight:bold;
+}
+
+.small{
+    font-size:12px;
 }
 </style>
 
 </head>
+
 <body>
 
-<h2>VpnProduct Users</h2>
+<div class="menu">
+    <a href="/">首頁</a>
+    |
+    <a href="/admin/index.html">Admin Dashboard</a>
+    |
+    <a href="/admin/subscriptions.html">訂閱管理</a>
+    |
+    <a href="/admin/users.html">使用者管理</a>
+</div>
 
-<div class="top">
+<hr>
+
+<h2>VpnProduct Users Dashboard</h2>
+
+<div>
 
 Admin Token
 
-<input id="token" style="width:220px"
-value="admin-123456">
+<input id="token" style="width:220px" type="password">
 
-Search
+<button onclick="saveToken()">Save Token</button>
 
-<input id="search" style="width:220px">
+</div>
+
+<br>
+
+<div>
+
+Search Email
+
+<input id="search"
+       style="width:280px"
+       list="emailList"
+       oninput="loadEmailSuggestions()">
+
+<datalist id="emailList"></datalist>
 
 Page Size
 
 <select id="pageSize">
-<option value="50">50</option>
-<option value="100">100</option>
+    <option value="50">50</option>
+    <option value="100">100</option>
 </select>
 
-<button onclick="loadUsers()">
-Search
-</button>
+<button onclick="searchUsers()">Search</button>
+
+<button onclick="loadUsers()">Refresh</button>
 
 </div>
+
+<br>
 
 <div id="summary"></div>
 
 <br>
 
 <table>
-
 <thead>
 <tr>
-<th>Email</th>
-<th>Confirmed</th>
-<th>Subscription</th>
-<th>Expire</th>
-<th>IP</th>
-<th>PublicKey</th>
-<th>Peer</th>
+    <th>Email</th>
+    <th>Email Confirmed</th>
+    <th>Subscription</th>
+    <th>Expire</th>
+    <th>VPN IP</th>
+    <th>Public Key</th>
+    <th>Peer Active</th>
+    <th>Actions</th>
 </tr>
 </thead>
 
 <tbody id="rows">
 </tbody>
-
 </table>
 
 <br>
@@ -98,15 +140,89 @@ Search
 
 <button onclick="nextPage()">Next</button>
 
+<pre id="result"></pre>
+
 <script>
 
-let currentPage=1;
-let totalPages=1;
+let currentPage = 1;
+let totalPages = 1;
+
+function getToken()
+{
+    const saved =
+        localStorage.getItem("adminToken");
+
+    if(saved)
+    {
+        document.getElementById("token").value =
+            saved;
+
+        return saved;
+    }
+
+    return document.getElementById("token").value;
+}
+
+function saveToken()
+{
+    const token =
+        document.getElementById("token").value;
+
+    localStorage.setItem("adminToken", token);
+
+    alert("Token saved.");
+}
+
+async function loadEmailSuggestions()
+{
+    const token = getToken();
+
+    const search =
+        document.getElementById("search").value;
+
+    if(search.length < 1)
+    {
+        return;
+    }
+
+    const res = await fetch(
+        `/api/admin/user-emails?search=${encodeURIComponent(search)}`,
+        {
+            headers:
+            {
+                "X-Admin-Token": token
+            }
+        });
+
+    if(!res.ok)
+    {
+        return;
+    }
+
+    const emails =
+        await res.json();
+
+    let html = "";
+
+    for(const email of emails)
+    {
+        html += `<option value="${email}"></option>`;
+    }
+
+    document.getElementById("emailList").innerHTML =
+        html;
+}
+
+function searchUsers()
+{
+    currentPage = 1;
+    loadUsers();
+}
 
 async function loadUsers()
 {
     const token =
-        document.getElementById("token").value;
+        getToken();
 
     const search =
         document.getElementById("search").value;
@@ -120,43 +236,159 @@ async function loadUsers()
             {
                 headers:
                 {
-                    "X-Admin-Token":token
+                    "X-Admin-Token": token
                 }
             });
 
-    const data = await res.json();
+    if(res.status === 401)
+    {
+        alert("Unauthorized. Please check admin token.");
+        return;
+    }
 
-    totalPages=data.totalPages;
+    const data =
+        await res.json();
 
-    document.getElementById("summary").innerText=
+    totalPages =
+        data.totalPages;
+
+    document.getElementById("summary").innerText =
         `Total Users: ${data.totalCount}`;
 
-    document.getElementById("pageInfo").innerText=
+    document.getElementById("pageInfo").innerText =
         `Page ${data.page}/${data.totalPages}`;
 
-    let html="";
+    let html = "";
 
     for(const u of data.data)
     {
-        html+=`
+        const confirmed =
+            u.emailConfirmed
+                ? `<span class="ok">Yes</span>`
+                : `<span class="bad">No</span>`;
+
+        const sub =
+            u.subscriptionActive
+                ? `<span class="ok">Active</span>`
+                : `<span class="bad">Inactive</span>`;
+
+        const peer =
+            u.peerActive
+                ? `<span class="ok">Active</span>`
+                : `<span class="bad">Inactive</span>`;
+
+        html += `
         <tr>
             <td>${u.email}</td>
-            <td>${u.emailConfirmed}</td>
-            <td>${u.subscriptionActive}</td>
+            <td>${confirmed}</td>
+            <td>${sub}</td>
             <td>${u.subscriptionExpireAtUtc ?? ""}</td>
             <td>${u.assignedIp ?? ""}</td>
-            <td>${u.publicKey ?? ""}</td>
-            <td>${u.peerActive}</td>
+            <td class="small">${u.publicKey ?? ""}</td>
+            <td>${peer}</td>
+            <td>
+                <button onclick="extendSub('${u.email}', 30)">
+                    延長30天
+                </button>
+
+                <button onclick="disableSub('${u.email}')">
+                    停權
+                </button>
+
+                <button onclick="enableSub('${u.email}', 30)">
+                    啟用30天
+                </button>
+            </td>
         </tr>`;
     }
 
-    document.getElementById("rows").innerHTML=
+    document.getElementById("rows").innerHTML =
         html;
+}
+
+async function extendSub(email, days)
+{
+    const token =
+        getToken();
+
+    const res =
+        await fetch("/api/admin/extend-subscription",
+        {
+            method:"POST",
+            headers:
+            {
+                "Content-Type":"application/json",
+                "X-Admin-Token":token
+            },
+            body:JSON.stringify(
+            {
+                userEmail:email,
+                days:days
+            })
+        });
+
+    document.getElementById("result").innerText =
+        await res.text();
+
+    await loadUsers();
+}
+
+async function disableSub(email)
+{
+    const token =
+        getToken();
+
+    const res =
+        await fetch("/api/admin/disable-subscription",
+        {
+            method:"POST",
+            headers:
+            {
+                "Content-Type":"application/json",
+                "X-Admin-Token":token
+            },
+            body:JSON.stringify(
+            {
+                userEmail:email
+            })
+        });
+
+    document.getElementById("result").innerText =
+        await res.text();
+
+    await loadUsers();
+}
+
+async function enableSub(email, days)
+{
+    const token =
+        getToken();
+
+    const res =
+        await fetch("/api/admin/enable-subscription",
+        {
+            method:"POST",
+            headers:
+            {
+                "Content-Type":"application/json",
+                "X-Admin-Token":token
+            },
+            body:JSON.stringify(
+            {
+                userEmail:email,
+                days:days
+            })
+        });
+
+    document.getElementById("result").innerText =
+        await res.text();
+
+    await loadUsers();
 }
 
 function prevPage()
 {
-    if(currentPage>1)
+    if(currentPage > 1)
     {
         currentPage--;
         loadUsers();
@@ -165,13 +397,14 @@ function prevPage()
 
 function nextPage()
 {
-    if(currentPage<totalPages)
+    if(currentPage < totalPages)
     {
         currentPage++;
         loadUsers();
     }
 }
 
+getToken();
 loadUsers();
 
 </script>
