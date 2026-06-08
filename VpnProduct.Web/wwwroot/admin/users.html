@@ -52,6 +52,33 @@ button{
 .small{
     font-size:12px;
 }
+
+.search-box{
+    position:relative;
+    display:inline-block;
+}
+
+.suggestions{
+    position:absolute;
+    background:white;
+    border:1px solid #999;
+    width:300px;
+    max-height:180px;
+    overflow-y:auto;
+    z-index:999;
+    display:none;
+}
+
+.suggestion-item{
+    padding:6px;
+    cursor:pointer;
+    font-size:13px;
+}
+
+.suggestion-item:hover{
+    background:#e8f0fe;
+}
+
 </style>
 
 </head>
@@ -88,12 +115,15 @@ Admin Token
 
 Search Email
 
-<input id="search"
-       style="width:280px"
-       list="emailList"
-       oninput="loadEmailSuggestions()">
+<div class="search-box">
+    <input id="search"
+           style="width:300px"
+           autocomplete="off"
+           oninput="loadEmailSuggestions()"
+           onfocus="loadEmailSuggestions()">
 
-<datalist id="emailList"></datalist>
+    <div id="suggestions" class="suggestions"></div>
+</div>
 
 Page Size
 
@@ -146,6 +176,7 @@ Page Size
 
 let currentPage = 1;
 let totalPages = 1;
+let suggestTimer = null;
 
 function getToken()
 {
@@ -175,47 +206,89 @@ function saveToken()
 
 async function loadEmailSuggestions()
 {
-    const token = getToken();
+    clearTimeout(suggestTimer);
 
-    const search =
-        document.getElementById("search").value;
+    suggestTimer = setTimeout(async function(){
 
-    if(search.length < 1)
-    {
-        return;
-    }
+        const token = getToken();
 
-    const res = await fetch(
-        `/api/admin/user-emails?search=${encodeURIComponent(search)}`,
+        const search =
+            document.getElementById("search").value.trim();
+
+        const box =
+            document.getElementById("suggestions");
+
+        if(search.length < 1)
         {
-            headers:
+            box.style.display = "none";
+            box.innerHTML = "";
+            return;
+        }
+
+        const res = await fetch(
+            `/api/admin/user-emails?search=${encodeURIComponent(search)}`,
             {
-                "X-Admin-Token": token
-            }
-        });
+                headers:
+                {
+                    "X-Admin-Token": token
+                }
+            });
 
-    if(!res.ok)
-    {
-        return;
-    }
+        if(!res.ok)
+        {
+            box.style.display = "none";
+            return;
+        }
 
-    const emails =
-        await res.json();
+        const emails =
+            await res.json();
 
-    let html = "";
+        if(emails.length === 0)
+        {
+            box.style.display = "none";
+            box.innerHTML = "";
+            return;
+        }
 
-    for(const email of emails)
-    {
-        html += `<option value="${email}"></option>`;
-    }
+        let html = "";
 
-    document.getElementById("emailList").innerHTML =
-        html;
+        for(const email of emails)
+        {
+            html += `
+                <div class="suggestion-item"
+                     onclick="selectEmail('${email}')">
+                    ${email}
+                </div>`;
+        }
+
+        box.innerHTML =
+            html;
+
+        box.style.display =
+            "block";
+
+    }, 250);
+}
+
+function selectEmail(email)
+{
+    document.getElementById("search").value =
+        email;
+
+    document.getElementById("suggestions").style.display =
+        "none";
+
+    currentPage = 1;
+
+    loadUsers();
 }
 
 function searchUsers()
 {
     currentPage = 1;
+    document.getElementById("suggestions").style.display =
+        "none";
+
     loadUsers();
 }
 
@@ -403,6 +476,17 @@ function nextPage()
         loadUsers();
     }
 }
+
+document.addEventListener("click", function(e){
+    const searchBox =
+        document.querySelector(".search-box");
+
+    if(!searchBox.contains(e.target))
+    {
+        document.getElementById("suggestions").style.display =
+            "none";
+    }
+});
 
 getToken();
 loadUsers();
