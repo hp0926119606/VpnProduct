@@ -63,14 +63,14 @@ button{
     background:white;
     border:1px solid #999;
     width:300px;
-    max-height:180px;
+    max-height:220px;
     overflow-y:auto;
     z-index:999;
     display:none;
 }
 
 .suggestion-item{
-    padding:6px;
+    padding:7px;
     cursor:pointer;
     font-size:13px;
 }
@@ -78,7 +78,6 @@ button{
 .suggestion-item:hover{
     background:#e8f0fe;
 }
-
 </style>
 
 </head>
@@ -100,19 +99,14 @@ button{
 <h2>VpnProduct Users Dashboard</h2>
 
 <div>
-
 Admin Token
-
 <input id="token" style="width:220px" type="password">
-
 <button onclick="saveToken()">Save Token</button>
-
 </div>
 
 <br>
 
 <div>
-
 Search Email
 
 <div class="search-box">
@@ -120,7 +114,7 @@ Search Email
            style="width:300px"
            autocomplete="off"
            oninput="loadEmailSuggestions()"
-           onfocus="loadEmailSuggestions()">
+           onfocus="loadEmailSuggestions(true)">
 
     <div id="suggestions" class="suggestions"></div>
 </div>
@@ -133,9 +127,8 @@ Page Size
 </select>
 
 <button onclick="searchUsers()">Search</button>
-
+<button onclick="clearSearch()">Clear</button>
 <button onclick="loadUsers()">Refresh</button>
-
 </div>
 
 <br>
@@ -165,9 +158,7 @@ Page Size
 <br>
 
 <button onclick="prevPage()">Prev</button>
-
 <span id="pageInfo"></span>
-
 <button onclick="nextPage()">Next</button>
 
 <pre id="result"></pre>
@@ -204,13 +195,14 @@ function saveToken()
     alert("Token saved.");
 }
 
-async function loadEmailSuggestions()
+async function loadEmailSuggestions(showAllOnFocus)
 {
     clearTimeout(suggestTimer);
 
     suggestTimer = setTimeout(async function(){
 
-        const token = getToken();
+        const token =
+            getToken();
 
         const search =
             document.getElementById("search").value.trim();
@@ -218,15 +210,19 @@ async function loadEmailSuggestions()
         const box =
             document.getElementById("suggestions");
 
-        if(search.length < 1)
+        let url =
+            "/api/admin/user-emails?search=" +
+            encodeURIComponent(search);
+
+        if(search.length < 1 && !showAllOnFocus)
         {
             box.style.display = "none";
             box.innerHTML = "";
             return;
         }
 
-        const res = await fetch(
-            `/api/admin/user-emails?search=${encodeURIComponent(search)}`,
+        const res =
+            await fetch(url,
             {
                 headers:
                 {
@@ -267,7 +263,7 @@ async function loadEmailSuggestions()
         box.style.display =
             "block";
 
-    }, 250);
+    }, 150);
 }
 
 function selectEmail(email)
@@ -286,9 +282,17 @@ function selectEmail(email)
 function searchUsers()
 {
     currentPage = 1;
+
     document.getElementById("suggestions").style.display =
         "none";
 
+    loadUsers();
+}
+
+function clearSearch()
+{
+    document.getElementById("search").value = "";
+    currentPage = 1;
     loadUsers();
 }
 
