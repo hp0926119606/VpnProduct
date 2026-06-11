@@ -129,6 +129,7 @@ Page Size
 <button onclick="searchUsers()">Search</button>
 <button onclick="clearSearch()">Clear</button>
 <button onclick="loadUsers()">Refresh</button>
+<button onclick="exportExcel()">匯出 Excel</button>
 </div>
 
 <br>
@@ -210,10 +211,6 @@ async function loadEmailSuggestions(showAllOnFocus)
         const box =
             document.getElementById("suggestions");
 
-        let url =
-            "/api/admin/user-emails?search=" +
-            encodeURIComponent(search);
-
         if(search.length < 1 && !showAllOnFocus)
         {
             box.style.display = "none";
@@ -222,13 +219,15 @@ async function loadEmailSuggestions(showAllOnFocus)
         }
 
         const res =
-            await fetch(url,
-            {
-                headers:
+            await fetch(
+                "/api/admin/user-emails?search=" +
+                encodeURIComponent(search),
                 {
-                    "X-Admin-Token": token
-                }
-            });
+                    headers:
+                    {
+                        "X-Admin-Token": token
+                    }
+                });
 
         if(!res.ok)
         {
@@ -294,6 +293,62 @@ function clearSearch()
     document.getElementById("search").value = "";
     currentPage = 1;
     loadUsers();
+}
+
+function exportExcel()
+{
+    const token =
+        getToken();
+
+    const search =
+        document.getElementById("search").value;
+
+    const url =
+        "/api/admin/users-export-xlsx?search=" +
+        encodeURIComponent(search);
+
+    fetch(url,
+    {
+        headers:
+        {
+            "X-Admin-Token": token
+        }
+    })
+    .then(response =>
+    {
+        if(!response.ok)
+        {
+            throw new Error("Export failed: " + response.status);
+        }
+
+        return response.blob();
+    })
+    .then(blob =>
+    {
+        const downloadUrl =
+            window.URL.createObjectURL(blob);
+
+        const a =
+            document.createElement("a");
+
+        a.href =
+            downloadUrl;
+
+        a.download =
+            "vpnproduct-users.xlsx";
+
+        document.body.appendChild(a);
+
+        a.click();
+
+        a.remove();
+
+        window.URL.revokeObjectURL(downloadUrl);
+    })
+    .catch(err =>
+    {
+        alert(err.message);
+    });
 }
 
 async function loadUsers()

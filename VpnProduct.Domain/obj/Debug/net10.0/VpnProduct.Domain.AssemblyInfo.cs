@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VpnProduct.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+349dff3664184616b14621e1189c584776164839")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+483617c1c4ff0990864ea6ed3bd5a5a21e0b54b5")]
 [assembly: System.Reflection.AssemblyProductAttribute("VpnProduct.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VpnProduct.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

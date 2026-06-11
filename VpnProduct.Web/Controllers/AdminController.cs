@@ -1,3 +1,7 @@
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +28,7 @@ public class AdminController : ControllerBase
 
     private bool IsAdminAuthorized()
     {
-        var token =
-            Request.Headers["X-Admin-Token"].ToString();
+        var token = Request.Headers["X-Admin-Token"].ToString();
 
         return token == "admin-123456";
     }
@@ -83,8 +86,7 @@ public class AdminController : ControllerBase
                 x.Email.Contains(search));
         }
 
-        var totalCount =
-            await usersQuery.CountAsync();
+        var totalCount = await usersQuery.CountAsync();
 
         var users = await usersQuery
             .OrderByDescending(x => x.Id)
@@ -92,75 +94,108 @@ public class AdminController : ControllerBase
             .Take(pageSize)
             .ToListAsync();
 
-        var emails = users
-            .Select(x => x.Email ?? "")
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToList();
-
-        var subscriptions = await _db.Subscriptions
-            .Where(x => emails.Contains(x.UserEmail))
-            .ToListAsync();
-
-        var peers = await _db.VpnPeers
-            .Where(x => emails.Contains(x.Name))
-            .ToListAsync();
-
-        var data = users.Select(user =>
-        {
-            var email =
-                user.Email ?? "";
-
-            var sub = subscriptions
-                .Where(x => x.UserEmail == email)
-                .OrderByDescending(x => x.ExpireAtUtc)
-                .FirstOrDefault();
-
-            var peer = peers
-                .Where(x => x.Name == email)
-                .OrderByDescending(x => x.Id)
-                .FirstOrDefault();
-
-            return new
-            {
-                user.Id,
-                Email = email,
-                user.UserName,
-                user.EmailConfirmed,
-
-                SubscriptionActive =
-                    sub?.IsActive ?? false,
-
-                SubscriptionExpireAtUtc =
-                    sub?.ExpireAtUtc,
-
-                IsExpired =
-                    sub != null &&
-                    sub.ExpireAtUtc <= DateTime.UtcNow,
-
-                PeerId =
-                    peer?.Id,
-
-                AssignedIp =
-                    peer?.AssignedIp,
-
-                PublicKey =
-                    peer?.PublicKey,
-
-                PeerActive =
-                    peer?.IsActive ?? false
-            };
-        });
+        var data = await BuildUserRowsAsync(users);
 
         return Ok(new
         {
             page,
             pageSize,
             totalCount,
-            totalPages =
-                (int)Math.Ceiling(
-                    totalCount / (double)pageSize),
+            totalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
             data
         });
+    }
+
+    [HttpGet("users-export-xlsx")]
+    public async Task<IActionResult> ExportUsersXlsx(
+        [FromQuery] string? search = "")
+    {
+        if (!IsAdminAuthorized())
+        {
+            return Unauthorized();
+        }
+
+        var usersQuery = _userManager.Users.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            usersQuery = usersQuery.Where(x =>
+                x.Email != null &&
+                x.Email.Contains(search));
+        }
+
+        var users = await usersQuery
+            .OrderBy(x => x.Email)
+            .ToListAsync();
+
+        var rows = await BuildUserRowsAsync(users);
+
+        using var stream = new MemoryStream();
+
+        using (var spreadsheet = SpreadsheetDocument.Create(
+            stream,
+            SpreadsheetDocumentType.Workbook))
+        {
+            var workbookPart = spreadsheet.AddWorkbookPart();
+            workbookPart.Workbook = new Workbook();
+
+            var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+
+            var sheetData = new SheetData();
+
+            worksheetPart.Worksheet = new Worksheet(sheetData);
+
+            var sheets = spreadsheet.WorkbookPart!.Workbook.AppendChild(new Sheets());
+
+            sheets.Append(new Sheet
+            {
+                Id = spreadsheet.WorkbookPart.GetIdOfPart(worksheetPart),
+                SheetId = 1,
+                Name = "Users"
+            });
+
+            var header = new Row();
+
+            AddCell(header, "Email");
+            AddCell(header, "UserName");
+            AddCell(header, "EmailConfirmed");
+            AddCell(header, "SubscriptionActive");
+            AddCell(header, "SubscriptionExpireAtUtc");
+            AddCell(header, "IsExpired");
+            AddCell(header, "PeerId");
+            AddCell(header, "AssignedIp");
+            AddCell(header, "PublicKey");
+            AddCell(header, "PeerActive");
+
+            sheetData.Append(header);
+
+            foreach (var row in rows)
+            {
+                var excelRow = new Row();
+
+                AddCell(excelRow, row.Email);
+                AddCell(excelRow, row.UserName);
+                AddCell(excelRow, row.EmailConfirmed.ToString());
+                AddCell(excelRow, row.SubscriptionActive.ToString());
+                AddCell(excelRow, row.SubscriptionExpireAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "");
+                AddCell(excelRow, row.IsExpired.ToString());
+                AddCell(excelRow, row.PeerId?.ToString() ?? "");
+                AddCell(excelRow, row.AssignedIp ?? "");
+                AddCell(excelRow, row.PublicKey ?? "");
+                AddCell(excelRow, row.PeerActive.ToString());
+
+                sheetData.Append(excelRow);
+            }
+
+            workbookPart.Workbook.Save();
+        }
+
+        var bytes = stream.ToArray();
+
+        return File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "vpnproduct-users.xlsx");
     }
 
     [HttpGet("subscriptions")]
@@ -171,8 +206,7 @@ public class AdminController : ControllerBase
             return Unauthorized();
         }
 
-        var now =
-            DateTime.UtcNow;
+        var now = DateTime.UtcNow;
 
         var subscriptions = await _db.Subscriptions
             .OrderBy(x => x.ExpireAtUtc)
@@ -182,8 +216,7 @@ public class AdminController : ControllerBase
                 x.StartAtUtc,
                 x.ExpireAtUtc,
                 x.IsActive,
-                IsExpired =
-                    x.ExpireAtUtc <= now
+                IsExpired = x.ExpireAtUtc <= now
             })
             .ToListAsync();
 
@@ -225,8 +258,7 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            expireAtUtc =
-                subscription.ExpireAtUtc
+            expireAtUtc = subscription.ExpireAtUtc
         });
     }
 
@@ -256,10 +288,8 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            userEmail =
-                subscription.UserEmail,
-            isActive =
-                subscription.IsActive
+            userEmail = subscription.UserEmail,
+            isActive = subscription.IsActive
         });
     }
 
@@ -299,12 +329,82 @@ public class AdminController : ControllerBase
         return Ok(new
         {
             success = true,
-            userEmail =
-                subscription.UserEmail,
-            isActive =
-                subscription.IsActive,
-            expireAtUtc =
-                subscription.ExpireAtUtc
+            userEmail = subscription.UserEmail,
+            isActive = subscription.IsActive,
+            expireAtUtc = subscription.ExpireAtUtc
         });
+    }
+
+    private async Task<List<AdminUserRow>> BuildUserRowsAsync(
+        List<IdentityUser> users)
+    {
+        var emails = users
+            .Select(x => x.Email ?? "")
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        var subscriptions = await _db.Subscriptions
+            .Where(x => emails.Contains(x.UserEmail))
+            .ToListAsync();
+
+        var peers = await _db.VpnPeers
+            .Where(x => emails.Contains(x.Name))
+            .ToListAsync();
+
+        var data = users.Select(user =>
+        {
+            var email = user.Email ?? "";
+
+            var sub = subscriptions
+                .Where(x => x.UserEmail == email)
+                .OrderByDescending(x => x.ExpireAtUtc)
+                .FirstOrDefault();
+
+            var peer = peers
+                .Where(x => x.Name == email)
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefault();
+
+            return new AdminUserRow
+            {
+                Id = user.Id,
+                Email = email,
+                UserName = user.UserName ?? "",
+                EmailConfirmed = user.EmailConfirmed,
+                SubscriptionActive = sub?.IsActive ?? false,
+                SubscriptionExpireAtUtc = sub?.ExpireAtUtc,
+                IsExpired = sub != null && sub.ExpireAtUtc <= DateTime.UtcNow,
+                PeerId = peer?.Id,
+                AssignedIp = peer?.AssignedIp,
+                PublicKey = peer?.PublicKey,
+                PeerActive = peer?.IsActive ?? false
+            };
+        }).ToList();
+
+        return data;
+    }
+
+    private static void AddCell(Row row, string text)
+    {
+        row.Append(new Cell
+        {
+            DataType = CellValues.String,
+            CellValue = new CellValue(text)
+        });
+    }
+
+    private sealed class AdminUserRow
+    {
+        public string Id { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public bool EmailConfirmed { get; set; }
+        public bool SubscriptionActive { get; set; }
+        public DateTime? SubscriptionExpireAtUtc { get; set; }
+        public bool IsExpired { get; set; }
+        public Guid? PeerId { get; set; }
+        public string? AssignedIp { get; set; }
+        public string? PublicKey { get; set; }
+        public bool PeerActive { get; set; }
     }
 }
