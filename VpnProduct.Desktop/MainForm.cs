@@ -1,13 +1,18 @@
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace VpnProduct.Desktop;
 
 public class MainForm : Form
 {
-    private const string AppVersion = "2.0.0";
+    private const string AppVersion = "3.0.0";
     private const string ApiBaseUrl = "https://yct.myftp.org";
+
+    private const string Udp2RawServer = "61.70.3.87:80";
+    private const string Udp2RawLocal = "127.0.0.1:51820";
+    private const string Udp2RawKey = "VpnProduct2026";
 
     private readonly TextBox txtEmail = new();
     private readonly TextBox txtPassword = new();
@@ -28,7 +33,7 @@ public class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
 
-        lblServer.Text = $"Server: {ApiBaseUrl}";
+        lblServer.Text = $"Server: {ApiBaseUrl} / VPN TCP 80";
         lblServer.Left = 20;
         lblServer.Top = 20;
         lblServer.Width = 640;
@@ -99,6 +104,7 @@ public class MainForm : Form
 
         Log($"VpnProduct Client v{AppVersion}");
         Log($"API Server: {ApiBaseUrl}");
+        Log($"VPN Mode: TCP 80 via udp2raw");
     }
 
     private async void BtnConnect_Click(object? sender, EventArgs e)
@@ -197,6 +203,8 @@ public class MainForm : Form
             var conf = await http.GetStringAsync(
                 $"{ApiBaseUrl}/api/vpnpeers/{result.PeerId}/config-file");
 
+            conf = RewriteEndpointToLocalUdp2Raw(conf);
+
             Directory.CreateDirectory(@"C:\ProgramData\VpnProduct");
 
             var confPath = @"C:\ProgramData\VpnProduct\wg0.conf";
@@ -208,7 +216,7 @@ public class MainForm : Form
 
             EnsureWireGuardInstalled();
 
-            SetStatus("Removing old tunnel...");
+            SetStatus("Stopping old tunnel...");
             Log("Removing old tunnel if exists...");
 
             RunAdmin("sc.exe", "stop WireGuardTunnel$wg0", ignoreError: true);
@@ -216,8 +224,17 @@ public class MainForm : Form
 
             await Task.Delay(1200);
 
-            SetStatus("Starting tunnel...");
-            Log("Starting tunnel...");
+            StopUdp2Raw();
+
+            await Task.Delay(800);
+
+            SetStatus("Starting TCP tunnel...");
+            StartUdp2Raw();
+
+            await Task.Delay(2500);
+
+            SetStatus("Starting WireGuard...");
+            Log("Starting WireGuard tunnel...");
 
             var wireGuardExe = GetWireGuardExePath();
 
@@ -226,7 +243,7 @@ public class MainForm : Form
                 $"/installtunnelservice \"{confPath}\"");
 
             SetStatus("Connected");
-            Log("Connected.");
+            Log("Connected via TCP 80.");
 
             MessageBox.Show("VPN Connected");
         }
@@ -248,7 +265,7 @@ public class MainForm : Form
         {
             btnDisconnect.Enabled = false;
 
-            SetStatus("Stopping tunnel...");
+            SetStatus("Stopping WireGuard...");
             Log("Stopping tunnel...");
 
             RunAdmin("sc.exe", "stop WireGuardTunnel$wg0", ignoreError: true);
@@ -259,6 +276,11 @@ public class MainForm : Form
             Log("Deleting tunnel service...");
 
             RunAdmin("sc.exe", "delete WireGuardTunnel$wg0", ignoreError: true);
+
+            await Task.Delay(800);
+
+            SetStatus("Stopping TCP tunnel...");
+            StopUdp2Raw();
 
             SetStatus("Disconnected");
             Log("Disconnected.");
@@ -275,6 +297,15 @@ public class MainForm : Form
         {
             btnDisconnect.Enabled = true;
         }
+    }
+
+    private static string RewriteEndpointToLocalUdp2Raw(string conf)
+    {
+        return Regex.Replace(
+            conf,
+            @"Endpoint\s*=\s*[^\r\n]+",
+            "Endpoint = 127.0.0.1:51820",
+            RegexOptions.IgnoreCase);
     }
 
     private static string GetWireGuardExePath()
@@ -343,6 +374,54 @@ public class MainForm : Form
         }
 
         Log("WireGuard installed.");
+    }
+
+    private static string GetUdp2RawPath()
+    {
+        return Path.Combine(
+            AppContext.BaseDirectory,
+            "udp2raw.exe");
+    }
+
+    private void StartUdp2Raw()
+    {
+        var udp2raw = GetUdp2RawPath();
+
+        if (!File.Exists(udp2raw))
+        {
+            throw new FileNotFoundException(
+                "udp2raw.exe not found.",
+                udp2raw);
+        }
+
+        Log("Starting udp2raw...");
+        Log($"udp2raw server: {Udp2RawServer}");
+
+        var args =
+            $"-c -l\"{Udp2RawLocal}\" -r\"{Udp2RawServer}\" -k\"{Udp2RawKey}\" --raw-mode faketcp";
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = udp2raw,
+            Arguments = args,
+            Verb = "runas",
+            UseShellExecute = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+
+        Log("udp2raw started.");
+    }
+
+    private void StopUdp2Raw()
+    {
+        Log("Stopping udp2raw...");
+
+        RunAdmin(
+            "taskkill.exe",
+            "/IM udp2raw.exe /F",
+            ignoreError: true);
+
+        Log("udp2raw stopped.");
     }
 
     private static void RunAdmin(

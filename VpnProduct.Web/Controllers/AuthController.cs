@@ -171,19 +171,27 @@ public class AuthController : ControllerBase
 
         if (user == null)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = false,
-                Message = "User not found"
+                success = false,
+                message = "User not found",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = (DateTime?)null,
+                daysRemaining = 0
             });
         }
 
         if (!user.EmailConfirmed)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = false,
-                Message = "Email not confirmed"
+                success = false,
+                message = "Email not confirmed",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = (DateTime?)null,
+                daysRemaining = 0
             });
         }
 
@@ -192,33 +200,63 @@ public class AuthController : ControllerBase
 
         if (!valid)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = false,
-                Message = "Password invalid"
+                success = false,
+                message = "Password invalid",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = (DateTime?)null,
+                daysRemaining = 0
             });
         }
 
         var subscription = await _db.Subscriptions
-            .FirstOrDefaultAsync(x =>
-                x.UserEmail == email &&
-                x.IsActive);
+            .Where(x => x.UserEmail == email)
+            .OrderByDescending(x => x.ExpireAtUtc)
+            .FirstOrDefaultAsync();
 
         if (subscription == null)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = false,
-                Message = "Subscription not found"
+                success = false,
+                message = "Subscription not found",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = (DateTime?)null,
+                daysRemaining = 0
             });
         }
 
-        if (subscription.ExpireAtUtc <= DateTime.UtcNow)
+        var now = DateTime.UtcNow;
+
+        var daysRemaining =
+            (int)Math.Ceiling((subscription.ExpireAtUtc - now).TotalDays);
+
+        if (!subscription.IsActive)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = false,
-                Message = "Subscription expired"
+                success = false,
+                message = "Subscription inactive",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = subscription.ExpireAtUtc,
+                daysRemaining = Math.Max(daysRemaining, 0)
+            });
+        }
+
+        if (subscription.ExpireAtUtc <= now)
+        {
+            return Ok(new
+            {
+                success = false,
+                message = "Subscription expired",
+                peerId = "",
+                subscriptionActive = false,
+                expireAtUtc = subscription.ExpireAtUtc,
+                daysRemaining = 0
             });
         }
 
@@ -229,11 +267,14 @@ public class AuthController : ControllerBase
 
         if (existingPeer != null)
         {
-            return Ok(new LoginResponse
+            return Ok(new
             {
-                Success = true,
-                Message = "OK",
-                PeerId = existingPeer.Id.ToString()
+                success = true,
+                message = "OK",
+                peerId = existingPeer.Id.ToString(),
+                subscriptionActive = true,
+                expireAtUtc = subscription.ExpireAtUtc,
+                daysRemaining = Math.Max(daysRemaining, 0)
             });
         }
 
@@ -243,11 +284,14 @@ public class AuthController : ControllerBase
             Name = email
         });
 
-        return Ok(new LoginResponse
+        return Ok(new
         {
-            Success = true,
-            Message = "OK",
-            PeerId = createdPeer.Id.ToString()
+            success = true,
+            message = "OK",
+            peerId = createdPeer.Id.ToString(),
+            subscriptionActive = true,
+            expireAtUtc = subscription.ExpireAtUtc,
+            daysRemaining = Math.Max(daysRemaining, 0)
         });
     }
 }
