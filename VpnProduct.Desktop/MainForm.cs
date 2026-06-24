@@ -7,12 +7,11 @@ namespace VpnProduct.Desktop;
 
 public class MainForm : Form
 {
-    private const string AppVersion = "3.0.0";
-    private const string ApiBaseUrl = "https://yct.myftp.org";
+    private const string AppVersion = "4.0.0";
+    private const string ApiBaseUrl = "https://yct.myftp.org:8443";
 
-    private const string Udp2RawServer = "61.70.3.87:80";
-    private const string Udp2RawLocal = "127.0.0.1:51820";
-    private const string Udp2RawKey = "VpnProduct2026";
+    private const string WstunnelServer = "ws://yct.myftp.org:443";
+    private const string WstunnelLocal = "udp://51820:127.0.0.1:51820?timeout_sec=0";
 
     private readonly TextBox txtEmail = new();
     private readonly TextBox txtPassword = new();
@@ -21,44 +20,31 @@ public class MainForm : Form
     private readonly TextBox txtLog = new();
     private readonly Label lblServer = new();
     private readonly Label lblStatus = new();
+    private readonly Label lblSubscription = new();
 
     public MainForm()
     {
         Text = $"VpnProduct Client v{AppVersion}";
         Width = 720;
-        Height = 560;
+        Height = 590;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Microsoft JhengHei UI", 10);
         AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
 
-        lblServer.Text = $"Server: {ApiBaseUrl} / VPN TCP 80";
+        lblServer.Text = $"API: {ApiBaseUrl} / VPN: TCP 443";
         lblServer.Left = 20;
         lblServer.Top = 20;
-        lblServer.Width = 640;
+        lblServer.Width = 660;
         lblServer.Height = 28;
 
-        var lblEmail = new Label
-        {
-            Text = "Email",
-            Left = 20,
-            Top = 65,
-            Width = 120
-        };
-
+        var lblEmail = new Label { Text = "Email", Left = 20, Top = 65, Width = 120 };
         txtEmail.Left = 20;
         txtEmail.Top = 90;
         txtEmail.Width = 640;
 
-        var lblPassword = new Label
-        {
-            Text = "Password",
-            Left = 20,
-            Top = 135,
-            Width = 120
-        };
-
+        var lblPassword = new Label { Text = "Password", Left = 20, Top = 135, Width = 120 };
         txtPassword.Left = 20;
         txtPassword.Top = 160;
         txtPassword.Width = 640;
@@ -84,10 +70,16 @@ public class MainForm : Form
         lblStatus.Width = 640;
         lblStatus.Height = 28;
 
+        lblSubscription.Text = "Subscription: Unknown";
+        lblSubscription.Left = 20;
+        lblSubscription.Top = 310;
+        lblSubscription.Width = 640;
+        lblSubscription.Height = 28;
+
         txtLog.Left = 20;
-        txtLog.Top = 320;
+        txtLog.Top = 350;
         txtLog.Width = 640;
-        txtLog.Height = 170;
+        txtLog.Height = 180;
         txtLog.Multiline = true;
         txtLog.ScrollBars = ScrollBars.Vertical;
         txtLog.ReadOnly = true;
@@ -100,11 +92,12 @@ public class MainForm : Form
         Controls.Add(btnConnect);
         Controls.Add(btnDisconnect);
         Controls.Add(lblStatus);
+        Controls.Add(lblSubscription);
         Controls.Add(txtLog);
 
         Log($"VpnProduct Client v{AppVersion}");
         Log($"API Server: {ApiBaseUrl}");
-        Log($"VPN Mode: TCP 80 via udp2raw");
+        Log("VPN Mode: wstunnel over TCP 443");
     }
 
     private async void BtnConnect_Click(object? sender, EventArgs e)
@@ -133,18 +126,14 @@ public class MainForm : Form
 
             using var http = new HttpClient
             {
-                Timeout = TimeSpan.FromSeconds(30)
+                Timeout = TimeSpan.FromSeconds(45)
             };
 
             Log("Login...");
 
             var response = await http.PostAsJsonAsync(
                 $"{ApiBaseUrl}/api/auth/login",
-                new
-                {
-                    email,
-                    password
-                });
+                new { email, password });
 
             var json = await response.Content.ReadAsStringAsync();
             Log(json);
@@ -179,6 +168,10 @@ public class MainForm : Form
 
             if (!result.Success)
             {
+                lblSubscription.Text = result.Message.Contains("expired", StringComparison.OrdinalIgnoreCase)
+                    ? "Subscription: Expired"
+                    : "Subscription: Inactive";
+
                 MessageBox.Show(result.Message);
 
                 if (result.Message.Contains("expired", StringComparison.OrdinalIgnoreCase))
@@ -197,13 +190,16 @@ public class MainForm : Form
                 return;
             }
 
+            lblSubscription.Text =
+                $"Subscription: Remaining {result.DaysRemaining} Days";
+
             SetStatus("Downloading config...");
             Log("Downloading config...");
 
             var conf = await http.GetStringAsync(
                 $"{ApiBaseUrl}/api/vpnpeers/{result.PeerId}/config-file");
 
-            conf = RewriteEndpointToLocalUdp2Raw(conf);
+            conf = RewriteEndpointToLocalWstunnel(conf);
 
             Directory.CreateDirectory(@"C:\ProgramData\VpnProduct");
 
@@ -224,12 +220,12 @@ public class MainForm : Form
 
             await Task.Delay(1200);
 
-            StopUdp2Raw();
+            StopWstunnel();
 
             await Task.Delay(800);
 
-            SetStatus("Starting TCP tunnel...");
-            StartUdp2Raw();
+            SetStatus("Starting TCP 443 tunnel...");
+            StartWstunnel();
 
             await Task.Delay(2500);
 
@@ -243,7 +239,7 @@ public class MainForm : Form
                 $"/installtunnelservice \"{confPath}\"");
 
             SetStatus("Connected");
-            Log("Connected via TCP 80.");
+            Log("Connected via wstunnel TCP 443.");
 
             MessageBox.Show("VPN Connected");
         }
@@ -279,8 +275,8 @@ public class MainForm : Form
 
             await Task.Delay(800);
 
-            SetStatus("Stopping TCP tunnel...");
-            StopUdp2Raw();
+            SetStatus("Stopping TCP 443 tunnel...");
+            StopWstunnel();
 
             SetStatus("Disconnected");
             Log("Disconnected.");
@@ -299,7 +295,7 @@ public class MainForm : Form
         }
     }
 
-    private static string RewriteEndpointToLocalUdp2Raw(string conf)
+    private static string RewriteEndpointToLocalWstunnel(string conf)
     {
         return Regex.Replace(
             conf,
@@ -376,52 +372,52 @@ public class MainForm : Form
         Log("WireGuard installed.");
     }
 
-    private static string GetUdp2RawPath()
+    private static string GetWstunnelPath()
     {
         return Path.Combine(
             AppContext.BaseDirectory,
-            "udp2raw.exe");
+            "wstunnel.exe");
     }
 
-    private void StartUdp2Raw()
+    private void StartWstunnel()
     {
-        var udp2raw = GetUdp2RawPath();
+        var wstunnel = GetWstunnelPath();
 
-        if (!File.Exists(udp2raw))
+        if (!File.Exists(wstunnel))
         {
             throw new FileNotFoundException(
-                "udp2raw.exe not found.",
-                udp2raw);
+                "wstunnel.exe not found.",
+                wstunnel);
         }
 
-        Log("Starting udp2raw...");
-        Log($"udp2raw server: {Udp2RawServer}");
+        Log("Starting wstunnel...");
+        Log($"wstunnel server: {WstunnelServer}");
 
         var args =
-            $"-c -l\"{Udp2RawLocal}\" -r\"{Udp2RawServer}\" -k\"{Udp2RawKey}\" --raw-mode faketcp";
+            $"client -L \"{WstunnelLocal}\" {WstunnelServer}";
 
         Process.Start(new ProcessStartInfo
         {
-            FileName = udp2raw,
+            FileName = wstunnel,
             Arguments = args,
             Verb = "runas",
             UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Hidden
         });
 
-        Log("udp2raw started.");
+        Log("wstunnel started.");
     }
 
-    private void StopUdp2Raw()
+    private void StopWstunnel()
     {
-        Log("Stopping udp2raw...");
+        Log("Stopping wstunnel...");
 
         RunAdmin(
             "taskkill.exe",
-            "/IM udp2raw.exe /F",
+            "/IM wstunnel.exe /F",
             ignoreError: true);
 
-        Log("udp2raw stopped.");
+        Log("wstunnel stopped.");
     }
 
     private static void RunAdmin(
@@ -465,7 +461,15 @@ public class MainForm : Form
     private sealed class LoginResponse
     {
         public bool Success { get; set; }
+
         public string Message { get; set; } = "";
+
         public string PeerId { get; set; } = "";
+
+        public bool SubscriptionActive { get; set; }
+
+        public DateTime? ExpireAtUtc { get; set; }
+
+        public int DaysRemaining { get; set; }
     }
 }

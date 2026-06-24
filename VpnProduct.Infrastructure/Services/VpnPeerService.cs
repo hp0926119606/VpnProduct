@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,7 +21,9 @@ namespace VpnProduct.Infrastructure.Services
             _configuration = configuration;
         }
 
-        public async Task<CreateVpnPeerResponse> CreateAsync(CreateVpnPeerRequest request, CancellationToken cancellationToken = default)
+        public async Task<CreateVpnPeerResponse> CreateAsync(
+            CreateVpnPeerRequest request,
+            CancellationToken cancellationToken = default)
         {
             var node = await _db.VpnNodes
                 .FirstOrDefaultAsync(x => x.Id == request.VpnNodeId && x.IsActive, cancellationToken);
@@ -87,7 +90,9 @@ namespace VpnProduct.Infrastructure.Services
             };
         }
 
-        public async Task<GetVpnPeerConfigResponse> GetConfigAsync(Guid peerId, CancellationToken cancellationToken = default)
+        public async Task<GetVpnPeerConfigResponse> GetConfigAsync(
+            Guid peerId,
+            CancellationToken cancellationToken = default)
         {
             var peer = await _db.VpnPeers
                 .FirstOrDefaultAsync(x => x.Id == peerId, cancellationToken);
@@ -110,43 +115,70 @@ namespace VpnProduct.Infrastructure.Services
             };
         }
 
-        private async Task<string> AllocateNextIpAsync(Guid nodeId, CancellationToken cancellationToken)
+        private async Task<string> AllocateNextIpAsync(
+            Guid nodeId,
+            CancellationToken cancellationToken)
         {
-            var prefix = _configuration["VpnProduct:PeerIpPrefix"] ?? "10.0.1.";
-            var start = int.Parse(_configuration["VpnProduct:PeerIpStart"] ?? "201");
-            var end = int.Parse(_configuration["VpnProduct:PeerIpEnd"] ?? "254");
+            var startIpText =
+                _configuration["VpnProduct:PeerIpStart"] ??
+                "10.200.0.2";
 
-            var usedIps = await _db.VpnPeers
+            var endIpText =
+                _configuration["VpnProduct:PeerIpEnd"] ??
+                "10.200.255.254";
+
+            var startIp = ToUInt32(IPAddress.Parse(startIpText));
+            var endIp = ToUInt32(IPAddress.Parse(endIpText));
+
+            if (startIp > endIp)
+            {
+                throw new InvalidOperationException("PeerIpStart must be less than or equal to PeerIpEnd.");
+            }
+
+            var usedIpNumbers = await _db.VpnPeers
                 .Where(x => x.VpnNodeId == nodeId)
                 .Select(x => x.AssignedIp)
                 .ToListAsync(cancellationToken);
 
-            for (var i = start; i <= end; i++)
-            {
-                var ip = $"{prefix}{i}/32";
+            var usedSet = usedIpNumbers
+                .Select(NormalizeIp)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => ToUInt32(IPAddress.Parse(x!)))
+                .ToHashSet();
 
-                if (!usedIps.Contains(ip))
+            for (var current = startIp; current <= endIp; current++)
+            {
+                if (!usedSet.Contains(current))
                 {
-                    return ip;
+                    return $"{FromUInt32(current)}/32";
+                }
+
+                if (current == uint.MaxValue)
+                {
+                    break;
                 }
             }
 
             throw new InvalidOperationException("No available VPN client IP.");
         }
 
-        private WireGuardKeyPair GenerateWireGuardKeyPair()
+        private string BuildClientConfig(
+            VpnNode node,
+            string clientPrivateKey,
+            string assignedIp)
         {
-            var privateKey = RunCommand("/bin/bash", "-c \"wg genkey\"").Trim();
-            var publicKey = RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
+            var endpointHost =
+                _configuration["VpnProduct:EndpointHost"] ??
+                "61.70.3.87";
 
-            return new WireGuardKeyPair(privateKey, publicKey);
-        }
+            var dns =
+                _configuration["VpnProduct:ClientDns"] ??
+                "8.8.8.8";
 
-        private string BuildClientConfig(VpnNode node, string clientPrivateKey, string assignedIp)
-        {
-            var endpointHost = _configuration["VpnProduct:EndpointHost"] ?? "61.70.3.87";
-            var dns = _configuration["VpnProduct:ClientDns"] ?? "8.8.8.8";
-            var allowedIps = _configuration["VpnProduct:ClientAllowedIps"] ?? "0.0.0.0/0";
+            var allowedIps =
+                _configuration["VpnProduct:ClientAllowedIps"] ??
+                "0.0.0.0/0";
+
             var serverPublicKey = GetServerPublicKey();
 
             return $"""
@@ -172,7 +204,9 @@ PersistentKeepalive = 25
                 return configured.Trim();
             }
 
-            var serverConfigPath = _configuration["VpnProduct:ServerWireGuardConfigPath"] ?? "/etc/wireguard/wg1.conf";
+            var serverConfigPath =
+                _configuration["VpnProduct:ServerWireGuardConfigPath"] ??
+                "/etc/wireguard/wg1.conf";
 
             if (!File.Exists(serverConfigPath))
             {
@@ -192,6 +226,62 @@ PersistentKeepalive = 25
             return RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
         }
 
+        private static string NormalizeIp(string assignedIp)
+        {
+            if (string.IsNullOrWhiteSpace(assignedIp))
+            {
+                return "";
+            }
+
+            var value = assignedIp.Trim();
+
+            var slashIndex = value.IndexOf('/');
+
+            if (slashIndex >= 0)
+            {
+                value = value[..slashIndex];
+            }
+
+            return value.Trim();
+        }
+
+        private static uint ToUInt32(IPAddress ip)
+        {
+            var bytes = ip.GetAddressBytes();
+
+            if (bytes.Length != 4)
+            {
+                throw new InvalidOperationException("Only IPv4 is supported.");
+            }
+
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(bytes);
+            }
+
+            return BitConverter.ToUInt32(bytes, 0);
+        }
+
+        private static IPAddress FromUInt32(uint value)
+        {
+            var bytes = BitConverter.GetBytes(value);
+
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(bytes);
+            }
+
+            return new IPAddress(bytes);
+        }
+
+        private WireGuardKeyPair GenerateWireGuardKeyPair()
+        {
+            var privateKey = RunCommand("/bin/bash", "-c \"wg genkey\"").Trim();
+            var publicKey = RunCommandWithStandardInput("/usr/bin/wg", "pubkey", privateKey).Trim();
+
+            return new WireGuardKeyPair(privateKey, publicKey);
+        }
+
         private static string RunCommand(string fileName, string arguments)
         {
             var psi = new ProcessStartInfo
@@ -203,7 +293,9 @@ PersistentKeepalive = 25
                 UseShellExecute = false
             };
 
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {fileName}");
+            using var process =
+                Process.Start(psi) ??
+                throw new InvalidOperationException($"Failed to start {fileName}");
 
             var output = process.StandardOutput.ReadToEnd();
             var error = process.StandardError.ReadToEnd();
@@ -218,7 +310,10 @@ PersistentKeepalive = 25
             return output;
         }
 
-        private static string RunCommandWithStandardInput(string fileName, string arguments, string standardInput)
+        private static string RunCommandWithStandardInput(
+            string fileName,
+            string arguments,
+            string standardInput)
         {
             var psi = new ProcessStartInfo
             {
@@ -230,7 +325,9 @@ PersistentKeepalive = 25
                 UseShellExecute = false
             };
 
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {fileName}");
+            using var process =
+                Process.Start(psi) ??
+                throw new InvalidOperationException($"Failed to start {fileName}");
 
             process.StandardInput.WriteLine(standardInput);
             process.StandardInput.Close();
@@ -248,6 +345,8 @@ PersistentKeepalive = 25
             return output;
         }
 
-        private sealed record WireGuardKeyPair(string PrivateKey, string PublicKey);
+        private sealed record WireGuardKeyPair(
+            string PrivateKey,
+            string PublicKey);
     }
 }
