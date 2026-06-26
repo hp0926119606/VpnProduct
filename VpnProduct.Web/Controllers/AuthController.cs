@@ -25,19 +25,22 @@ public class AuthController : ControllerBase
     private readonly IVpnPeerService _vpnPeerService;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
+private readonly IWireGuardManager _wireGuardManager;
 
     public AuthController(
         UserManager<IdentityUser> userManager,
         ApplicationDbContext db,
         IVpnPeerService vpnPeerService,
         IEmailSender emailSender,
-        IConfiguration configuration)
+        IConfiguration configuration,
+IWireGuardManager wireGuardManager)
     {
         _userManager = userManager;
         _db = db;
         _vpnPeerService = vpnPeerService;
         _emailSender = emailSender;
         _configuration = configuration;
+_wireGuardManager = wireGuardManager;
     }
 
     [HttpPost("register")]
@@ -101,6 +104,8 @@ public class AuthController : ControllerBase
             VpnNodeId = DefaultVpnNodeId,
             Name = email
         });
+
+await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
@@ -283,6 +288,8 @@ public class AuthController : ControllerBase
             VpnNodeId = DefaultVpnNodeId,
             Name = email
         });
+
+await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         return Ok(new
         {

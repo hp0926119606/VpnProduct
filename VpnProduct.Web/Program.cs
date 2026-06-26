@@ -40,6 +40,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IVpnPeerService, VpnPeerService>();
 builder.Services.AddScoped<ISyncJobService, SyncJobService>();
 builder.Services.AddScoped<IWireGuardServerConfigService, WireGuardServerConfigService>();
+builder.Services.AddScoped<IWireGuardManager, WireGuardManager>();
 builder.Services.AddScoped<IEmailSender, GmailEmailSender>();
 
 var app = builder.Build();
