@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using VpnProduct.Infrastructure.Data;
 using VpnProduct.Web.Models;
 
+using VpnProduct.Application.Interfaces;
+
 namespace VpnProduct.Web.Controllers;
 
 [ApiController]
@@ -18,12 +20,17 @@ public class AdminController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly UserManager<IdentityUser> _userManager;
 
+private readonly IWireGuardManager _wireGuardManager;
+
+
     public AdminController(
         ApplicationDbContext db,
-        UserManager<IdentityUser> userManager)
+        UserManager<IdentityUser> userManager,
+	IWireGuardManager wireGuardManager)
     {
         _db = db;
         _userManager = userManager;
+ 	_wireGuardManager = wireGuardManager;
     }
 
     private bool IsAdminAuthorized()
@@ -407,4 +414,96 @@ public class AdminController : ControllerBase
         public string? PublicKey { get; set; }
         public bool PeerActive { get; set; }
     }
+
+[HttpPost("delete-user")]
+public async Task<IActionResult> DeleteUser(
+    [FromBody] DeleteUserRequest request)
+{
+    if (!IsAdminAuthorized())
+    {
+        return Unauthorized();
+    }
+
+    var email = request.Email.Trim();
+
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        return BadRequest(new
+        {
+            success = false,
+            message = "Email is required."
+        });
+    }
+
+    var user = await _userManager.FindByEmailAsync(email);
+
+    if (user == null)
+    {
+        return NotFound(new
+        {
+            success = false,
+            message = "User not found."
+        });
+    }
+
+    var affectedNodeIds = await _db.VpnPeers
+        .Where(x => x.Name == email)
+        .Select(x => x.VpnNodeId)
+        .Distinct()
+        .ToListAsync();
+
+    var peers = await _db.VpnPeers
+        .Where(x => x.Name == email)
+        .ToListAsync();
+
+    var subscriptions = await _db.Subscriptions
+        .Where(x => x.UserEmail == email)
+        .ToListAsync();
+
+    _db.VpnPeers.RemoveRange(peers);
+    _db.Subscriptions.RemoveRange(subscriptions);
+
+    var deleteUserResult =
+        await _userManager.DeleteAsync(user);
+
+    if (!deleteUserResult.Succeeded)
+    {
+        return Ok(new
+        {
+            success = false,
+            message = string.Join("; ", deleteUserResult.Errors.Select(x => x.Description))
+        });
+    }
+
+    var nodes = await _db.VpnNodes
+        .Where(x => affectedNodeIds.Contains(x.Id))
+        .ToListAsync();
+
+    foreach (var node in nodes)
+    {
+        node.ConfigVersion += 1;
+    }
+
+    await _db.SaveChangesAsync();
+
+    foreach (var nodeId in affectedNodeIds)
+    {
+        await _wireGuardManager.ApplyConfigurationAsync(nodeId);
+    }
+
+    return Ok(new
+    {
+        success = true,
+        message = "User deleted.",
+        email,
+        deletedPeers = peers.Count,
+        deletedSubscriptions = subscriptions.Count
+    });
+}
+
+public sealed class DeleteUserRequest
+{
+    public string Email { get; set; } = "";
+}
+
 }
