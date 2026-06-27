@@ -24,20 +24,26 @@ public sealed class WireGuardManager : IWireGuardManager
         Guid nodeId,
         CancellationToken cancellationToken = default)
     {
-        var path =
+        var configPath =
             _configuration["VpnProduct:ServerWireGuardConfigPath"] ??
             "/etc/wireguard/wg1.conf";
 
         var interfaceName =
-            Path.GetFileNameWithoutExtension(path);
+            Path.GetFileNameWithoutExtension(configPath);
+
+        var syncPath =
+            $"/etc/wireguard/{interfaceName}.sync.conf";
 
         var node = await _db.VpnNodes
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == nodeId && x.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == nodeId && x.IsActive,
+                cancellationToken);
 
         if (node == null)
         {
-            throw new InvalidOperationException($"Active VpnNode not found: {nodeId}");
+            throw new InvalidOperationException(
+                $"Active VpnNode not found: {nodeId}");
         }
 
         var peers = await _db.VpnPeers
@@ -46,45 +52,38 @@ public sealed class WireGuardManager : IWireGuardManager
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
-        var privateKey = ReadPrivateKey(path);
+        var privateKey = ReadPrivateKey(configPath);
 
-        var config = BuildFullWgQuickConfig(
+        var fullConfig = BuildFullWgQuickConfig(
             privateKey,
             node.ServerAddressCidr,
             node.ListenPort,
             peers);
 
-        BackupFile(path);
+        var syncConfig = BuildSyncConfig(
+            privateKey,
+            node.ListenPort,
+            peers);
+
+        BackupFile(configPath);
 
         await File.WriteAllTextAsync(
-            path,
-            config,
-            Encoding.UTF8,
+            configPath,
+            fullConfig,
+            new UTF8Encoding(false),
             cancellationToken);
 
-        var syncFile =
-            $"/tmp/{interfaceName}.sync.{DateTime.UtcNow:yyyyMMddHHmmss}.conf";
+        await File.WriteAllTextAsync(
+            syncPath,
+            syncConfig,
+            new UTF8Encoding(false),
+            cancellationToken);
+
+        RunCommand("/usr/bin/chmod", $"600 \"{syncPath}\"");
 
         RunCommand(
-            "/bin/bash",
-            $"-c \"wg-quick strip {interfaceName} > {syncFile}\"");
-
-        try
-        {
-            RunCommand(
-                "/usr/bin/wg",
-                $"syncconf {interfaceName} {syncFile}");
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(syncFile);
-            }
-            catch
-            {
-            }
-        }
+            "/usr/bin/wg",
+            $"syncconf {interfaceName} \"{syncPath}\"");
     }
 
     private static string BuildFullWgQuickConfig(
@@ -107,6 +106,32 @@ public sealed class WireGuardManager : IWireGuardManager
         sb.AppendLine("PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE");
         sb.AppendLine();
 
+        AppendPeers(sb, peers);
+
+        return sb.ToString();
+    }
+
+    private static string BuildSyncConfig(
+        string privateKey,
+        int listenPort,
+        IReadOnlyCollection<Domain.Entities.VpnPeer> peers)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("[Interface]");
+        sb.AppendLine($"PrivateKey = {privateKey}");
+        sb.AppendLine($"ListenPort = {listenPort}");
+        sb.AppendLine();
+
+        AppendPeers(sb, peers);
+
+        return sb.ToString();
+    }
+
+    private static void AppendPeers(
+        StringBuilder sb,
+        IReadOnlyCollection<Domain.Entities.VpnPeer> peers)
+    {
         foreach (var peer in peers)
         {
             if (string.IsNullOrWhiteSpace(peer.PublicKey))
@@ -120,8 +145,6 @@ public sealed class WireGuardManager : IWireGuardManager
             sb.AppendLine($"AllowedIPs = {NormalizeToSingleHostCidr(peer.AssignedIp)}");
             sb.AppendLine();
         }
-
-        return sb.ToString();
     }
 
     private static string ReadPrivateKey(string configPath)
@@ -199,7 +222,8 @@ public sealed class WireGuardManager : IWireGuardManager
 
         using var process =
             Process.Start(psi) ??
-            throw new InvalidOperationException($"Failed to start {fileName}");
+            throw new InvalidOperationException(
+                $"Failed to start {fileName}");
 
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
