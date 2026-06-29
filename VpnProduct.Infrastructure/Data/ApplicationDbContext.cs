@@ -20,7 +20,10 @@ public class ApplicationDbContext
     public DbSet<VpnPeer> VpnPeers => Set<VpnPeer>();
 
     public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
-public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
+    public DbSet<UserDevice> UserDevices => Set<UserDevice>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -39,8 +42,33 @@ public DbSet<Subscription> Subscriptions => Set<Subscription>();
             .Property(x => x.Status)
             .HasMaxLength(50);
 
-builder.Entity<Subscription>()
-    .Property(x => x.UserEmail)
-    .HasMaxLength(200);
+        builder.Entity<Subscription>()
+            .Property(x => x.UserEmail)
+            .HasMaxLength(200);
+
+        builder.Entity<UserDevice>()
+            .Property(x => x.UserId)
+            .HasMaxLength(450);
+
+        builder.Entity<UserDevice>()
+            .Property(x => x.UserEmail)
+            .HasMaxLength(200);
+
+        builder.Entity<UserDevice>()
+            .Property(x => x.DeviceName)
+            .HasMaxLength(200);
+
+        builder.Entity<UserDevice>()
+            .Property(x => x.DeviceType)
+            .HasMaxLength(50);
+
+        builder.Entity<UserDevice>()
+            .Property(x => x.DeviceIdentifier)
+            .HasMaxLength(200);
+
+        builder.Entity<UserDevice>()
+            .HasOne(x => x.VpnPeer)
+            .WithMany()
+            .HasForeignKey(x => x.VpnPeerId);
     }
 }
