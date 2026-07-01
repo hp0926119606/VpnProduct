@@ -25,7 +25,7 @@ public class AuthController : ControllerBase
     private readonly IVpnPeerService _vpnPeerService;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
-private readonly IWireGuardManager _wireGuardManager;
+    private readonly IWireGuardManager _wireGuardManager;
 
     public AuthController(
         UserManager<IdentityUser> userManager,
@@ -33,14 +33,14 @@ private readonly IWireGuardManager _wireGuardManager;
         IVpnPeerService vpnPeerService,
         IEmailSender emailSender,
         IConfiguration configuration,
-IWireGuardManager wireGuardManager)
+        IWireGuardManager wireGuardManager)
     {
         _userManager = userManager;
         _db = db;
         _vpnPeerService = vpnPeerService;
         _emailSender = emailSender;
         _configuration = configuration;
-_wireGuardManager = wireGuardManager;
+        _wireGuardManager = wireGuardManager;
     }
 
     [HttpPost("register")]
@@ -99,14 +99,6 @@ _wireGuardManager = wireGuardManager;
 
         await _db.SaveChangesAsync();
 
-        var createdPeer = await _vpnPeerService.CreateAsync(new CreateVpnPeerRequest
-        {
-            VpnNodeId = DefaultVpnNodeId,
-            Name = email
-        });
-
-await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
-
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
         var encodedToken = WebEncoders.Base64UrlEncode(
@@ -114,7 +106,7 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         var publicBaseUrl =
             _configuration["VpnProduct:PublicBaseUrl"] ??
-            "https://yct.myftp.org";
+            "https://yct.myftp.org:8443";
 
         var confirmUrl =
             $"{publicBaseUrl.TrimEnd('/')}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
@@ -136,7 +128,7 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
         {
             Success = true,
             Message = "Registration successful. Please check your email to confirm your account.",
-            PeerId = createdPeer.Id.ToString()
+            PeerId = ""
         });
     }
 
@@ -176,28 +168,12 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         if (user == null)
         {
-            return Ok(new
-            {
-                success = false,
-                message = "User not found",
-                peerId = "",
-                subscriptionActive = false,
-                expireAtUtc = (DateTime?)null,
-                daysRemaining = 0
-            });
+            return LoginFail("User not found");
         }
 
         if (!user.EmailConfirmed)
         {
-            return Ok(new
-            {
-                success = false,
-                message = "Email not confirmed",
-                peerId = "",
-                subscriptionActive = false,
-                expireAtUtc = (DateTime?)null,
-                daysRemaining = 0
-            });
+            return LoginFail("Email not confirmed");
         }
 
         var valid =
@@ -205,15 +181,7 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         if (!valid)
         {
-            return Ok(new
-            {
-                success = false,
-                message = "Password invalid",
-                peerId = "",
-                subscriptionActive = false,
-                expireAtUtc = (DateTime?)null,
-                daysRemaining = 0
-            });
+            return LoginFail("Password invalid");
         }
 
         var subscription = await _db.Subscriptions
@@ -223,15 +191,7 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
 
         if (subscription == null)
         {
-            return Ok(new
-            {
-                success = false,
-                message = "Subscription not found",
-                peerId = "",
-                subscriptionActive = false,
-                expireAtUtc = (DateTime?)null,
-                daysRemaining = 0
-            });
+            return LoginFail("Subscription not found");
         }
 
         var now = DateTime.UtcNow;
@@ -246,6 +206,7 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
                 success = false,
                 message = "Subscription inactive",
                 peerId = "",
+                deviceId = "",
                 subscriptionActive = false,
                 expireAtUtc = subscription.ExpireAtUtc,
                 daysRemaining = Math.Max(daysRemaining, 0)
@@ -259,46 +220,136 @@ await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
                 success = false,
                 message = "Subscription expired",
                 peerId = "",
+                deviceId = "",
                 subscriptionActive = false,
                 expireAtUtc = subscription.ExpireAtUtc,
                 daysRemaining = 0
             });
         }
 
-        var existingPeer = await _db.VpnPeers
-            .Where(x => x.Name == email && x.IsActive)
-            .OrderByDescending(x => x.Id)
-            .FirstOrDefaultAsync();
+        var deviceName =
+            string.IsNullOrWhiteSpace(request.DeviceName)
+                ? "Windows Device"
+                : request.DeviceName.Trim();
 
-        if (existingPeer != null)
+        var deviceType =
+            string.IsNullOrWhiteSpace(request.DeviceType)
+                ? "Windows"
+                : request.DeviceType.Trim();
+
+        var deviceIdentifier =
+            string.IsNullOrWhiteSpace(request.DeviceIdentifier)
+                ? $"{email}:{deviceName}"
+                : request.DeviceIdentifier.Trim();
+
+        var device = await _db.UserDevices
+            .Include(x => x.VpnPeer)
+            .FirstOrDefaultAsync(x =>
+                x.UserId == user.Id &&
+                x.DeviceIdentifier == deviceIdentifier);
+
+        var changedWireGuard = false;
+
+        if (device == null)
         {
-            return Ok(new
+            var peerName =
+                $"{email} / {deviceName}";
+
+            var createdPeer =
+                await _vpnPeerService.CreateAsync(new CreateVpnPeerRequest
+                {
+                    VpnNodeId = DefaultVpnNodeId,
+                    Name = peerName
+                });
+
+            device = new UserDevice
             {
-                success = true,
-                message = "OK",
-                peerId = existingPeer.Id.ToString(),
-                subscriptionActive = true,
-                expireAtUtc = subscription.ExpireAtUtc,
-                daysRemaining = Math.Max(daysRemaining, 0)
-            });
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                UserEmail = email,
+                DeviceName = deviceName,
+                DeviceType = deviceType,
+                DeviceIdentifier = deviceIdentifier,
+                VpnPeerId = createdPeer.Id,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                LastSeenAtUtc = DateTime.UtcNow
+            };
+
+            _db.UserDevices.Add(device);
+
+            await _db.SaveChangesAsync();
+
+            changedWireGuard = true;
+        }
+        else
+        {
+            device.UserEmail = email;
+            device.DeviceName = deviceName;
+            device.DeviceType = deviceType;
+            device.LastSeenAtUtc = DateTime.UtcNow;
+
+            if (!device.IsActive)
+            {
+                return Ok(new
+                {
+                    success = false,
+                    message = "Device inactive",
+                    peerId = "",
+                    deviceId = device.Id.ToString(),
+                    subscriptionActive = true,
+                    expireAtUtc = subscription.ExpireAtUtc,
+                    daysRemaining = Math.Max(daysRemaining, 0)
+                });
+            }
+
+            if (device.VpnPeerId == null)
+            {
+                var peerName =
+                    $"{email} / {deviceName}";
+
+                var createdPeer =
+                    await _vpnPeerService.CreateAsync(new CreateVpnPeerRequest
+                    {
+                        VpnNodeId = DefaultVpnNodeId,
+                        Name = peerName
+                    });
+
+                device.VpnPeerId = createdPeer.Id;
+                changedWireGuard = true;
+            }
+
+            await _db.SaveChangesAsync();
         }
 
-        var createdPeer = await _vpnPeerService.CreateAsync(new CreateVpnPeerRequest
+        if (changedWireGuard)
         {
-            VpnNodeId = DefaultVpnNodeId,
-            Name = email
-        });
-
-await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
+            await _wireGuardManager.ApplyConfigurationAsync(DefaultVpnNodeId);
+        }
 
         return Ok(new
         {
             success = true,
             message = "OK",
-            peerId = createdPeer.Id.ToString(),
+            peerId = device.VpnPeerId?.ToString() ?? "",
+            deviceId = device.Id.ToString(),
             subscriptionActive = true,
             expireAtUtc = subscription.ExpireAtUtc,
             daysRemaining = Math.Max(daysRemaining, 0)
+        });
+    }
+
+    private static IActionResult LoginFail(string message)
+    {
+        return new OkObjectResult(new
+        {
+            success = false,
+            message,
+            peerId = "",
+            deviceId = "",
+            subscriptionActive = false,
+            expireAtUtc = (DateTime?)null,
+            daysRemaining = 0
         });
     }
 }
